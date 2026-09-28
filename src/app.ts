@@ -26,16 +26,26 @@ export interface AppDeps {
     /** Consultas por visitante numa janela (padrão: 60 por minuto). */
     limite?: { maximo: number; janelaMs: number };
   };
-  /** Atrás de proxy (EasyPanel): usa o IP real do visitante, necessário para o limite de consultas. */
-  trustProxy?: boolean;
+  /**
+   * Quantos proxies confiáveis ficam na frente do app (0 = nenhum). Só o IP anotado por eles vale para o limite de
+   * consultas; o que o visitante escreve em X-Forwarded-For é ignorado (ele pode inventar esse valor).
+   */
+  trustProxyHops?: number;
 }
+
+/**
+ * Confia nos primeiros `hops` servidores da cadeia (o que está colado no app é o de índice 0): o IP do visitante é o
+ * primeiro endereço que NÃO é de um proxy confiável, ou seja, o que o último proxy confiável anotou. Endereços que o
+ * visitante escreve em X-Forwarded-For ficam para trás e nunca são usados.
+ */
+const confiarNosProxies = (hops: number) => (hops > 0 ? (_endereco: string, indice: number) => indice < hops : false);
 
 const hash = (valor: string) => createHash("sha256").update(valor).digest();
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { repo, sync, accessToken } = deps;
   const agora = deps.agora ?? (() => new Date());
-  const app = Fastify({ logger: deps.logger ?? false, trustProxy: deps.trustProxy ?? false });
+  const app = Fastify({ logger: deps.logger ?? false, trustProxy: confiarNosProxies(deps.trustProxyHops ?? 0) });
 
   // Os dados têm nome e telefone de clientes: com ACCESS_TOKEN definido, toda a API (menos o health) exige o token.
   if (accessToken) {

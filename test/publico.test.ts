@@ -34,7 +34,7 @@ function novoRepo() {
 
 const falsoSync = (repo: PcpRepository) => new SyncService({ get: async () => [] as never }, repo, { statusLiberado: 2 });
 
-async function montarApp(opcoes: { accessToken?: string; publico?: Parameters<typeof buildApp>[0]["publico"]; trustProxy?: boolean; agora?: () => Date } = {}) {
+async function montarApp(opcoes: { accessToken?: string; publico?: Parameters<typeof buildApp>[0]["publico"]; trustProxyHops?: number; agora?: () => Date } = {}) {
   const repo = novoRepo();
   const app = await buildApp({ repo, sync: falsoSync(repo), accessToken: opcoes.accessToken ?? "", ...opcoes });
   return { app, repo };
@@ -172,14 +172,41 @@ test("LIMITE: passou de N consultas na janela → 429; outro visitante não é a
   assert.equal((await consulta("10.0.0.1")).statusCode, 200, "passada a janela, volta a funcionar");
 });
 
-test("atrás de proxy (trustProxy) o limite usa o IP real do visitante, não o do proxy", async () => {
-  const { app } = await montarApp({ trustProxy: true, publico: { limite: { maximo: 2, janelaMs: 60_000 } } });
+test("atrás de 1 proxy o limite usa o IP real do visitante (o anotado pelo proxy), não o do proxy", async () => {
+  const { app } = await montarApp({ trustProxyHops: 1, publico: { limite: { maximo: 2, janelaMs: 60_000 } } });
+  // O proxy (172.18.0.2) anota o IP de quem se conectou a ele em X-Forwarded-For.
   const consulta = (ipReal: string) =>
     app.inject({ method: "GET", url: "/api/publico/pedido?pedido=1978", remoteAddress: "172.18.0.2", headers: { "x-forwarded-for": ipReal } });
 
   await consulta("200.1.1.1"); await consulta("200.1.1.1");
   assert.equal((await consulta("200.1.1.1")).statusCode, 429, "o visitante 200.1.1.1 estourou o limite");
   assert.equal((await consulta("200.2.2.2")).statusCode, 200, "outro visitante atrás do MESMO proxy passa");
+});
+
+test("NÃO dá para burlar o limite inventando o cabeçalho X-Forwarded-For", async () => {
+  const { app } = await montarApp({ trustProxyHops: 1, publico: { limite: { maximo: 3, janelaMs: 60_000 } } });
+  // O visitante manda um IP inventado diferente a cada consulta; o proxy acrescenta o IP verdadeiro (200.9.9.9) no fim.
+  const codigos: number[] = [];
+  for (let i = 1; i <= 6; i++) {
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/publico/pedido?pedido=1978",
+      remoteAddress: "172.18.0.2",
+      headers: { "x-forwarded-for": `10.0.0.${i}, 200.9.9.9` },
+    });
+    codigos.push(r.statusCode);
+  }
+  assert.deepEqual(codigos, [200, 200, 200, 429, 429, 429], "o IP inventado é ignorado; vale o que o proxy anotou");
+});
+
+test("sem proxy confiável (0), o X-Forwarded-For é ignorado e vale o endereço da conexão", async () => {
+  const { app } = await montarApp({ trustProxyHops: 0, publico: { limite: { maximo: 2, janelaMs: 60_000 } } });
+  const codigos: number[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const r = await app.inject({ method: "GET", url: "/api/publico/pedido?pedido=1978", remoteAddress: "198.51.100.7", headers: { "x-forwarded-for": `10.0.0.${i}` } });
+    codigos.push(r.statusCode);
+  }
+  assert.deepEqual(codigos, [200, 200, 429, 429]);
 });
 
 // ---------------------------------------------------------------- o limitador sozinho

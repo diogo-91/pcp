@@ -114,7 +114,7 @@ O site da Gferro consulta o andamento de um pedido por `GET /api/publico/pedido?
 - **Busca só pelos dígitos:** `1978`, `01978` e `PD 01978` são o mesmo pedido.
 - **Prazo e status** são os da tabela do PCP, inclusive o que foi ajustado na tela.
 - **Pedidos antigos** (já entregues, que não estão mais na tabela) respondem a partir do **histórico**, importado da planilha. A tabela do PCP tem prioridade sobre o histórico.
-- **Limite de consultas:** 60 por minuto por visitante (`429` acima disso). Como os números de pedido são sequenciais, isso impede varrer todos rapidamente. Atrás de proxy usa o IP real (`TRUST_PROXY`, ligado por padrão em produção).
+- **Limite de consultas:** 60 por minuto por visitante (`429` acima disso). Como os números de pedido são sequenciais, isso impede varrer todos rapidamente. O IP do visitante é o que o proxy do EasyPanel anota (`TRUST_PROXY_HOPS`, padrão 1 em produção); o cabeçalho `X-Forwarded-For` escrito pelo próprio visitante é ignorado, então não dá para burlar o limite inventando IPs. Se colocar outro serviço na frente (ex.: Cloudflare), use `TRUST_PROXY_HOPS=2`.
 - **CORS:** por padrão qualquer site pode chamar (o dado é público e sem credenciais). Para restringir, defina `PUBLIC_ORIGINS` com os sites autorizados, separados por vírgula.
 - Erros lógicos (não encontrado, número inválido) voltam com HTTP 200 e `success: false`, como no script antigo.
 

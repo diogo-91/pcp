@@ -35,7 +35,7 @@ const app = await buildApp({
   sync,
   accessToken: config.accessToken,
   logger: true,
-  trustProxy: config.trustProxy,
+  trustProxyHops: config.trustProxyHops,
   publico: { origens: config.publicOrigins },
 });
 

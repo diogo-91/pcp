@@ -40,3 +40,15 @@ test("em desenvolvimento nada é exigido", () => {
   const semNada = {} as NodeJS.ProcessEnv;
   assert.deepEqual(problemasDeConfiguracao(loadConfig(semNada), semNada), []);
 });
+
+test("TRUST_PROXY_HOPS: padrão 1 em produção e 0 fora dela; valores inválidos voltam ao padrão", () => {
+  const de = (env: Record<string, string>) => loadConfig(env as NodeJS.ProcessEnv).trustProxyHops;
+  assert.equal(de({ NODE_ENV: "production" }), 1);
+  assert.equal(de({}), 0);
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "2" }), 2, "ex.: Cloudflare + EasyPanel");
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "0" }), 0);
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "abc" }), 1);
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "-1" }), 1);
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "99" }), 1);
+  assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "1.5" }), 1);
+});

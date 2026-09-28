@@ -15,8 +15,20 @@ export interface AppConfig {
   accessToken: string;
   /** Origens (sites) autorizadas a chamar a consulta pública do navegador. Vazio = qualquer uma. */
   publicOrigins: string[];
-  /** Atrás de proxy (EasyPanel): usa o IP real do visitante. Padrão: ligado em produção. */
-  trustProxy: boolean;
+  /**
+   * Quantos servidores intermediários (proxies) ficam entre o visitante e o app. O app só confia no IP anotado por
+   * eles, nunca no que o visitante escreve no cabeçalho X-Forwarded-For (que ele pode inventar). No domínio padrão do
+   * EasyPanel é 1; atrás de um serviço a mais (ex.: Cloudflare) é 2. Padrão: 1 em produção, 0 fora dela.
+   */
+  trustProxyHops: number;
+}
+
+function hopsDoProxy(env: NodeJS.ProcessEnv): number {
+  const padrao = env.NODE_ENV === "production" ? 1 : 0;
+  const valor = env.TRUST_PROXY_HOPS;
+  if (valor === undefined || valor === "") return padrao;
+  const n = Number(valor);
+  return Number.isInteger(n) && n >= 0 && n <= 5 ? n : padrao;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -34,7 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     syncIntervalMs: Number(env.SYNC_INTERVAL_MS ?? 60 * 60 * 1000),
     accessToken: env.ACCESS_TOKEN ?? "",
     publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
-    trustProxy: env.TRUST_PROXY ? env.TRUST_PROXY === "true" : env.NODE_ENV === "production",
+    trustProxyHops: hopsDoProxy(env),
   };
 }
 
