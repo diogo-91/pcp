@@ -22,7 +22,9 @@ const repo = new PcpRepository(openDatabase(config.databaseFile));
 try {
   const dados = JSON.parse(readFileSync(caminho, "utf8"));
   const r = importar(repo, dados, { atualizar: flags.includes("--atualizar"), agora: new Date().toISOString() });
-  console.log(`Importação concluída: ${r.inseridos} inseridos, ${r.atualizados} atualizados, ${r.jaExistiam} já existiam (sem mudança).`);
+  console.log(
+    `Importação concluída: ${r.inseridos} pedidos inseridos, ${r.atualizados} atualizados, ${r.jaExistiam} já existiam (sem mudança); histórico: ${r.historico} inseridos.`
+  );
 } catch (erro) {
   console.error(`Falhou: ${erro instanceof Error ? erro.message : String(erro)}`);
   process.exit(1);

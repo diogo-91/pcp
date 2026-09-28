@@ -70,3 +70,13 @@ export interface SyncStatus {
   ultima: SyncRun | null;
   ultimaComSucesso: SyncRun | null;
 }
+
+/** Pedido antigo que não está mais na tabela do PCP; só alimenta a consulta pública. */
+export interface HistoricoRow {
+  numero: number;
+  statusPcp: string;
+  /** AAAA-MM-DD ou null. */
+  prazoEntrega: string | null;
+  origem: string;
+  importadoEm: string;
+}

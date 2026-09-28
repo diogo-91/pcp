@@ -30,7 +30,14 @@ const nomus = new NomusClient({
 });
 
 const sync = new SyncService(nomus, repo, { statusLiberado: config.nomusStatusLiberado, log });
-const app = await buildApp({ repo, sync, accessToken: config.accessToken, logger: true });
+const app = await buildApp({
+  repo,
+  sync,
+  accessToken: config.accessToken,
+  logger: true,
+  trustProxy: config.trustProxy,
+  publico: { origens: config.publicOrigins },
+});
 
 await app.listen({ port: config.port, host: "0.0.0.0" });
 

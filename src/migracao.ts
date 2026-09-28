@@ -1,23 +1,27 @@
 import { ACAO_STATUS, LIMITES_TEXTO, STATUS_PCP } from "./constants";
 import { isDataPlausivel } from "./prazo";
 import type { PcpRepository } from "./repository";
-import type { PedidoRow, TratativaPatch } from "./types";
+import type { HistoricoRow, PedidoRow, TratativaPatch } from "./types";
 
 /** Formato do backup em JSON (exportar/importar). Serve para mover os dados entre bancos, ex.: do local para a produção. */
 export interface ArquivoMigracao {
   versao: 1;
   exportadoEm: string;
   pedidos: PedidoRow[];
+  /** Pedidos antigos (só para a consulta pública). Opcional: arquivos antigos não têm. */
+  historico?: HistoricoRow[];
 }
 
 export interface ResultadoImportacao {
   inseridos: number;
   atualizados: number;
   jaExistiam: number;
+  /** Pedidos do histórico inseridos (os que já existiam são ignorados). */
+  historico: number;
 }
 
 export function exportar(repo: PcpRepository, agora: string): ArquivoMigracao {
-  return { versao: 1, exportadoEm: agora, pedidos: repo.listar({ incluirFinalizados: true }) };
+  return { versao: 1, exportadoEm: agora, pedidos: repo.listar({ incluirFinalizados: true }), historico: repo.listarHistorico() };
 }
 
 const texto = (v: unknown, max: number) => typeof v === "string" && v.length <= max;
@@ -45,6 +49,17 @@ function motivoInvalido(p: unknown): string | null {
   return null;
 }
 
+function motivoHistoricoInvalido(h: unknown): string | null {
+  if (typeof h !== "object" || h === null) return "não é um objeto";
+  const x = h as Record<string, unknown>;
+  if (!Number.isInteger(x.numero) || (x.numero as number) <= 0) return "numero inválido";
+  if (!(STATUS_PCP as readonly unknown[]).includes(x.statusPcp)) return `statusPcp inválido (${String(x.statusPcp)})`;
+  if (!dataOuNula(x.prazoEntrega)) return "prazoEntrega inválido";
+  if (typeof x.origem !== "string" || x.origem === "") return "origem inválida";
+  if (typeof x.importadoEm !== "string" || Number.isNaN(Date.parse(x.importadoEm))) return "importadoEm inválido";
+  return null;
+}
+
 /**
  * Importa o backup. Regras:
  *  - o arquivo é validado INTEIRO antes de gravar qualquer coisa (um erro aborta tudo);
@@ -54,21 +69,29 @@ function motivoInvalido(p: unknown): string | null {
  */
 export function importar(repo: PcpRepository, dados: unknown, opcoes: { atualizar: boolean; agora: string }): ResultadoImportacao {
   if (typeof dados !== "object" || dados === null) throw new Error("Arquivo inválido: não é um JSON de backup.");
-  const arquivo = dados as { versao?: unknown; pedidos?: unknown };
+  const arquivo = dados as { versao?: unknown; pedidos?: unknown; historico?: unknown };
   if (arquivo.versao !== 1) throw new Error(`Arquivo inválido: versão ${String(arquivo.versao)} não suportada (esperado 1).`);
   if (!Array.isArray(arquivo.pedidos)) throw new Error("Arquivo inválido: falta a lista de pedidos.");
 
-  const invalidos = arquivo.pedidos
-    .map((p, i) => ({ i, motivo: motivoInvalido(p) }))
+  if (arquivo.historico !== undefined && !Array.isArray(arquivo.historico)) throw new Error("Arquivo inválido: o histórico deve ser uma lista.");
+
+  const invalidos = [
+    ...arquivo.pedidos.map((p, i) => ({ nome: `pedido #${i + 1}`, motivo: motivoInvalido(p) })),
+    ...(arquivo.historico ?? []).map((h, i) => ({ nome: `histórico #${i + 1}`, motivo: motivoHistoricoInvalido(h) })),
+  ]
     .filter((r) => r.motivo !== null)
     .slice(0, 5)
-    .map((r) => `pedido #${r.i + 1}: ${r.motivo}`);
+    .map((r) => `${r.nome}: ${r.motivo}`);
   if (invalidos.length > 0) throw new Error(`Arquivo inválido, nada foi importado. ${invalidos.join("; ")}`);
 
   const pedidos = arquivo.pedidos as PedidoRow[];
-  const resultado: ResultadoImportacao = { inseridos: 0, atualizados: 0, jaExistiam: 0 };
+  const resultado: ResultadoImportacao = { inseridos: 0, atualizados: 0, jaExistiam: 0, historico: 0 };
 
   repo.transacao(() => {
+    for (const h of (arquivo.historico ?? []) as HistoricoRow[]) {
+      if (repo.restaurarHistorico(h)) resultado.historico++;
+    }
+
     for (const p of pedidos) {
       const atual = repo.buscar(p.nomusId);
 

@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { STATUS_PCP_FINAIS } from "./constants";
 import { inTransaction } from "./db";
-import type { PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
+import type { HistoricoRow, PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
 
 export interface PessoaCache {
   nomusId: number;
@@ -39,6 +39,14 @@ const paraPedidoRow = (l: Linha): PedidoRow => ({
   prazoAcao: (l.prazo_acao as string | null) ?? null,
   acaoStatus: l.acao_status as string,
   atualizadoManualEm: (l.atualizado_manual_em as string | null) ?? null,
+});
+
+const paraHistorico = (l: Linha): HistoricoRow => ({
+  numero: l.numero as number,
+  statusPcp: l.status_pcp as string,
+  prazoEntrega: (l.prazo_entrega as string | null) ?? null,
+  origem: l.origem as string,
+  importadoEm: l.importado_em as string,
 });
 
 const paraSyncRun = (l: Linha): SyncRun => ({
@@ -126,6 +134,40 @@ export class PcpRepository {
       .all(...(opcoes.incluirFinalizados ? [] : STATUS_PCP_FINAIS)) as Linha[];
 
     return linhas.map(paraPedidoRow);
+  }
+
+  /** Pedido pelo NÚMERO (o que o cliente digita). Se houver mais de um com o mesmo número, vale o mais recente. */
+  buscarPorNumero(numero: number): PedidoRow | null {
+    const linha = this.db.prepare("SELECT * FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
+    return linha ? paraPedidoRow(linha) : null;
+  }
+
+  // ---- histórico (pedidos antigos, só para a consulta pública) ----
+
+  buscarHistorico(numero: number): HistoricoRow | null {
+    const l = this.db.prepare("SELECT * FROM historico_pedidos WHERE numero = ?").get(numero) as Linha | undefined;
+    return l ? paraHistorico(l) : null;
+  }
+
+  /**
+   * Lista o histórico. Tolera um banco de formato antigo, sem a tabela (o `exportar` só lê e não migra o banco
+   * de quem está com ele aberto): nesse caso não há histórico.
+   */
+  listarHistorico(): HistoricoRow[] {
+    const existe = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'historico_pedidos'").get();
+    if (!existe) return [];
+    return (this.db.prepare("SELECT * FROM historico_pedidos ORDER BY numero").all() as Linha[]).map(paraHistorico);
+  }
+
+  /** Insere um pedido do histórico sem sobrescrever. Não abre transação própria. */
+  restaurarHistorico(h: HistoricoRow): boolean {
+    const r = this.db
+      .prepare(
+        `INSERT INTO historico_pedidos (numero, status_pcp, prazo_entrega, origem, importado_em) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(numero) DO NOTHING`
+      )
+      .run(h.numero, h.statusPcp, h.prazoEntrega, h.origem, h.importadoEm);
+    return Number(r.changes) === 1;
   }
 
   buscar(nomusId: number): PedidoRow | null {

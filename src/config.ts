@@ -13,6 +13,10 @@ export interface AppConfig {
   syncIntervalMs: number;
   /** Se definido, /api/* (exceto /api/health) exige o header `x-pcp-token` com este valor. */
   accessToken: string;
+  /** Origens (sites) autorizadas a chamar a consulta pública do navegador. Vazio = qualquer uma. */
+  publicOrigins: string[];
+  /** Atrás de proxy (EasyPanel): usa o IP real do visitante. Padrão: ligado em produção. */
+  trustProxy: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -29,6 +33,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // dashboard do MES), então o padrão é 1 h. O botão "Sincronizar" força uma rodada quando precisar.
     syncIntervalMs: Number(env.SYNC_INTERVAL_MS ?? 60 * 60 * 1000),
     accessToken: env.ACCESS_TOKEN ?? "",
+    publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
+    trustProxy: env.TRUST_PROXY ? env.TRUST_PROXY === "true" : env.NODE_ENV === "production",
   };
 }
 

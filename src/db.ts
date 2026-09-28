@@ -53,6 +53,18 @@ const MIGRATIONS: string[] = [
     erro          TEXT
   );
   `,
+  // Pedidos antigos que não estão mais liberados na Nomus (vieram da planilha do PCP, quase todos encerrados).
+  // Servem só para o site público continuar respondendo a consulta de um pedido já entregue; a tabela do PCP
+  // não os mostra e a sincronização não mexe neles.
+  `
+  CREATE TABLE historico_pedidos (
+    numero        INTEGER PRIMARY KEY,
+    status_pcp    TEXT NOT NULL,
+    prazo_entrega TEXT,
+    origem        TEXT NOT NULL,
+    importado_em  TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

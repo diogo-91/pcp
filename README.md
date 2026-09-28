@@ -68,7 +68,7 @@ Em produção o servidor **não sobe sem `ACCESS_TOKEN`** (a tela mostra nomes e
 
 ### Levar os dados que já foram preenchidos (uma vez)
 
-O banco de produção nasce vazio. Para levar o que já foi digitado no banco local (status, prazos, atendimento...), gere um backup em JSON na máquina onde está o banco:
+O banco de produção nasce vazio. Para levar o que já foi digitado no banco local (status, prazos, atendimento...) e o histórico de pedidos antigos, gere um backup em JSON na máquina onde está o banco:
 
 ```
 npm run exportar -- backup.json
@@ -95,9 +95,30 @@ npm run importar -- /tmp/backup.json --atualizar
 | `PATCH /api/pedidos/:id` | Grava campos editáveis: `prazoEntrega`, `statusPcp`, `atendimento`, `responsavel`, `acao`, `prazoAcao`, `acaoStatus`. Datas AAAA-MM-DD entre 2000 e 2100 (vazio limpa). Número do pedido, cliente e telefone são recusados. |
 | `POST /api/sync` | Dispara a sincronização em segundo plano (202). |
 | `GET /api/sync` | Estado e histórico da última sincronização. |
+| `GET /api/publico/pedido?pedido=917` | **Consulta pública** (site dos clientes). Sem autenticação. Devolve só `{ success, pedido, status, prazo }`. Ver a seção abaixo. |
 | `GET /api/health` | Health check (sem autenticação). |
 
 Com `ACCESS_TOKEN`, as rotas `/api/*` (exceto health) exigem o header `x-pcp-token`.
+
+## Consulta pública (site dos clientes)
+
+O site da Gferro consulta o andamento de um pedido por `GET /api/publico/pedido?pedido=917`. A rota responde **no mesmo formato** que o Google Apps Script devolvia, então o site só precisa apontar a `ORDER_API_URL` para ela:
+
+```json
+{ "success": true, "pedido": "917", "status": "ENCERRADO", "prazo": "28/08/2026" }
+{ "success": false, "message": "Confira o número do pedido informado." }
+```
+
+- **Só expõe número, status e prazo.** Nunca nome, telefone, atendimento ou qualquer dado interno (há testes que garantem isso).
+- **Sem senha:** a rota fica fora do `ACCESS_TOKEN`, então o site funciona mesmo com a tela do PCP protegida.
+- **Busca só pelos dígitos:** `1978`, `01978` e `PD 01978` são o mesmo pedido.
+- **Prazo e status** são os da tabela do PCP, inclusive o que foi ajustado na tela.
+- **Pedidos antigos** (já entregues, que não estão mais na tabela) respondem a partir do **histórico**, importado da planilha. A tabela do PCP tem prioridade sobre o histórico.
+- **Limite de consultas:** 60 por minuto por visitante (`429` acima disso). Como os números de pedido são sequenciais, isso impede varrer todos rapidamente. Atrás de proxy usa o IP real (`TRUST_PROXY`, ligado por padrão em produção).
+- **CORS:** por padrão qualquer site pode chamar (o dado é público e sem credenciais). Para restringir, defina `PUBLIC_ORIGINS` com os sites autorizados, separados por vírgula.
+- Erros lógicos (não encontrado, número inválido) voltam com HTTP 200 e `success: false`, como no script antigo.
+
+**Atenção:** a planilha deixa de ser a fonte do site. Status e prazos devem ser atualizados no PCP.
 
 ## Estrutura
 
