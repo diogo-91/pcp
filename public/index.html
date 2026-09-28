@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GFERRO · PCP & Entrega</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f3bd30'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='16' font-weight='900' text-anchor='middle' fill='%23182536'%3EGF%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main class="app">
+  <div class="app-shell">
+
+    <aside class="app-sidebar">
+      <header>
+        <div class="brand">
+          <div class="mark">GF</div>
+          <div>
+            <h1>PCP &amp; Entrega</h1>
+            <div class="subtitle">Gferro · Gestão de pedidos e ações preventivas</div>
+          </div>
+        </div>
+      </header>
+      <div class="menu-label">Menu principal</div>
+      <nav class="navtabs" aria-label="Navegação principal">
+        <button class="navtab" type="button" data-view="dashboard" aria-selected="true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="navtab" type="button" data-view="tabela" aria-selected="false">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+          <span>Tabela de pedidos</span>
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <b>GFERRO • PCP</b>
+        Planejamento, controle da produção e entrega.
+        <span class="sidebar-version" id="versao">Banco de dados</span>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <div class="topbar">
+        <div class="mobile-brand"><span class="smallmark">GF</span>PCP &amp; Entrega</div>
+        <div class="topbar-path"><span class="topbar-app">GFERRO / PCP</span><span>›</span><b id="crumb">Dashboard</b></div>
+        <div class="topbar-right">
+          <span class="online" id="chip-sync">Carregando…</span>
+          <button type="button" class="btn-sync" id="btn-sync" title="Buscar agora os pedidos liberados na Nomus">Sincronizar</button>
+          <span class="topbar-date" id="data-hoje"></span>
+        </div>
+      </div>
+
+      <div class="aviso" id="aviso" hidden role="alert"></div>
+
+      <!-- ============ DASHBOARD ============ -->
+      <section id="view-dashboard" class="view">
+        <div class="viewhead">
+          <div>
+            <div class="eyebrow">VISÃO GERAL · PCP</div>
+            <h2>Painel de operações</h2>
+            <p>Pedidos liberados na Nomus, com controle de prazos e prioridades de entrega. Clique em um pedido para abri-lo na tabela.</p>
+          </div>
+          <div class="viewhead-pill">Dados da Nomus</div>
+        </div>
+
+        <div class="section-heading"><span>Indicadores operacionais</span><span class="detail">Contagem por pedido</span></div>
+        <section class="stats" id="stats">
+          <button class="stat" data-filtro="todos"><span>Pedidos liberados</span><strong id="n-total">—</strong><small>Ainda não encerrados</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5.5V3h6v2.5M9 12h6M9 16h6"/></svg></span></button>
+          <button class="stat" data-filtro="normal"><span>No prazo</span><strong id="n-normal">—</strong><small>Mais de 5 dias</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/></svg></span></button>
+          <button class="stat danger" data-filtro="atrasado"><span>Atrasados</span><strong id="n-atrasado">—</strong><small>Prazo ultrapassado</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3ZM12 9v5M12 18h.01"/></svg></span></button>
+          <button class="stat danger" data-filtro="ate2"><span>Vence em até 2 dias</span><strong id="n-ate2">—</strong><small>Hoje, amanhã ou em 2 dias</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></button>
+          <button class="stat risk" data-filtro="de3a5"><span>Vence em 3–5 dias</span><strong id="n-de3a5">—</strong><small>Antecipação preventiva</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg></span></button>
+          <button class="stat" data-filtro="semdata"><span>Sem prazo definido</span><strong id="n-semdata">—</strong><small>Sem data de entrega na Nomus</small>
+            <span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 15h8"/></svg></span></button>
+        </section>
+
+        <div class="dashboard-grid">
+          <div class="panel dashboard-summary">
+            <h3>Distribuição dos prazos</h3>
+            <p class="panel-subtitle">Situação atual dos pedidos liberados.</p>
+            <div class="insight"><span><i class="dot dot-red"></i> Pedidos vencidos</span><b id="d-atrasado">—</b></div>
+            <div class="insight"><span><i class="dot dot-orange"></i> Vencem em até 2 dias</span><b id="d-ate2">—</b></div>
+            <div class="insight"><span><i class="dot dot-yellow"></i> Vencem em 3 a 5 dias</span><b id="d-de3a5">—</b></div>
+            <div class="insight"><span><i class="dot"></i> Total a vencer em 5 dias</span><b id="d-ate5">—</b></div>
+            <div class="insight"><span><i class="dot dot-slate"></i> Sem prazo definido</span><b id="d-semdata">—</b></div>
+            <div class="progress-box">
+              <div class="progress-caption"><span>Distribuição do acompanhamento</span><strong id="progress-total">— pedidos</strong></div>
+              <div class="progress-track" aria-label="Distribuição proporcional de pedidos">
+                <span id="p-atrasado"></span><span id="p-ate2"></span><span id="p-de3a5"></span><span id="p-outros"></span>
+              </div>
+            </div>
+          </div>
+
+          <aside class="panel">
+            <div class="panelhead"><h2>Fila de ação prioritária</h2></div>
+            <div class="sidecontent">
+              <p>Fila ordenada por proximidade do prazo de entrega.</p>
+              <div id="prioridade"></div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="deadline-section-heading"><span>Acompanhamento por prioridade</span><small>Pedidos não finalizados</small></div>
+        <section class="deadline-grid">
+          <article class="panel deadline-panel">
+            <div class="deadline-head urgent"><h3>Vencimento em até 2 dias</h3><strong id="c-ate2">0</strong></div>
+            <p class="deadline-desc">Vencem hoje, amanhã ou em dois dias corridos.</p>
+            <div class="deadline-list" id="l-ate2"></div>
+          </article>
+          <article class="panel deadline-panel">
+            <div class="deadline-head warning"><h3>Vencimento em 3 a 5 dias</h3><strong id="c-de3a5">0</strong></div>
+            <p class="deadline-desc">Janela preventiva para alinhamento do PCP.</p>
+            <div class="deadline-list" id="l-de3a5"></div>
+          </article>
+          <article class="panel deadline-panel">
+            <div class="deadline-head latehead"><h3>Pedidos atrasados</h3><strong id="c-atrasado">0</strong></div>
+            <p class="deadline-desc">Prazo ultrapassado; precisam de acompanhamento.</p>
+            <div class="deadline-list" id="l-atrasado"></div>
+          </article>
+        </section>
+      </section>
+
+      <!-- ============ TABELA ============ -->
+      <section id="view-tabela" class="view" hidden>
+        <div class="viewhead">
+          <div>
+            <div class="eyebrow">CONTROLE OPERACIONAL</div>
+            <h2>Tabela de pedidos</h2>
+            <p>Pedidos liberados na Nomus. Ajuste o prazo e preencha status, atendimento, responsável e plano de ação: tudo é salvo no banco.</p>
+          </div>
+          <div class="viewhead-pill">Salvamento automático</div>
+        </div>
+
+        <article class="panel">
+          <div class="panelhead"><h2>Controle de pedidos</h2><small id="contagem"></small></div>
+          <div class="filters">
+            <input id="busca" placeholder="Buscar cliente, pedido, telefone, atendimento, ação..." aria-label="Buscar pedidos">
+            <select id="filtro-status" aria-label="Filtrar por status"><option value="todos">Todos os status</option></select>
+            <div class="filter-chip" id="chip-filtro">Todos os pedidos</div>
+          </div>
+          <div class="sheet-hint">
+            <span><strong>Pedido, cliente e telefone</strong> vêm da Nomus (somente leitura) · o prazo nasce com o da Nomus e pode ser ajustado aqui, assim como o restante</span>
+            <em>Role lateralmente para visualizar todas as colunas ↔</em>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr>
+                <th>Pedido</th><th>Cliente</th><th>Telefone</th><th>Status</th><th>Prazo de entrega</th><th>Alerta</th>
+                <th>Atendimento</th><th>Responsável</th><th>Plano de ação</th><th>Prazo da ação</th><th>Situação da ação</th>
+              </tr></thead>
+              <tbody id="linhas"></tbody>
+            </table>
+          </div>
+          <div class="pager"><small id="salvo">&nbsp;</small><small id="faixa-info"></small></div>
+        </article>
+      </section>
+
+      <div class="notice">
+        Nome do cliente, número do pedido, telefone e prazo de entrega vêm da <b>Nomus</b> (pedidos com status “Liberado”) quando o pedido <b>entra</b> na tabela.
+        A sincronização só <b>inclui pedidos novos</b>: um pedido que já está aqui nunca é alterado por ela, então o <b>prazo</b>, o status, o atendimento, o responsável e o plano de ação que você ajustar ficam exatamente como estão, salvos no banco de dados e compartilhados por todos.
+        O pedido só sai da tela quando você o marca como encerrado ou cancelado (continua guardado).
+        Os alertas usam a data de hoje (horário de Brasília) e dias corridos. “Até 2 dias” e “3 a 5 dias” são grupos exclusivos.
+      </div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

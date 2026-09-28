@@ -1,0 +1,29 @@
+{
+  "name": "gferro-pcp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PCP & Entrega da Gferro: pedidos liberados na Nomus + tratativa manual, salvos em banco SQLite.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "sync": "tsx src/scripts/sync-once.ts",
+    "exportar": "tsx src/scripts/exportar.ts",
+    "importar": "tsx src/scripts/importar.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.5",
+    "dotenv": "^18.0.4",
+    "fastify": "^5.12.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "tsx": "^4.23.15",
+    "typescript": "~5.8.2"
+  }
+}
