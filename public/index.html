@@ -45,6 +45,7 @@
         <div class="mobile-brand"><span class="smallmark">GF</span>PCP &amp; Entrega</div>
         <div class="topbar-path"><span class="topbar-app">GFERRO / PCP</span><span>›</span><b id="crumb">Dashboard</b></div>
         <div class="topbar-right">
+          <button type="button" class="chip-antigos" id="chip-antigos" hidden></button>
           <span class="online" id="chip-sync">Carregando…</span>
           <button type="button" class="btn-sync" id="btn-sync" title="Buscar agora os pedidos liberados na Nomus">Sincronizar</button>
           <span class="topbar-date" id="data-hoje"></span>
@@ -166,6 +167,7 @@
         A sincronização só <b>inclui pedidos novos</b>: um pedido que já está aqui nunca é alterado por ela, então o <b>prazo</b>, o status, o atendimento, o responsável e o plano de ação que você ajustar ficam exatamente como estão, salvos no banco de dados e compartilhados por todos.
         O pedido só sai da tela quando você o marca como encerrado ou cancelado (continua guardado).
         Os alertas usam a data de hoje (horário de Brasília) e dias corridos. “Até 2 dias” e “3 a 5 dias” são grupos exclusivos.
+        Pedidos não finalizados com mais de 90 dias de atraso ficam ocultos por padrão (continuam salvos); use o botão que aparece no topo para revê-los.
       </div>
     </div>
   </div>

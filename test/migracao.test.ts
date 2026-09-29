@@ -8,6 +8,7 @@ import type { PedidoNomus } from "../src/types";
 const T1 = "2026-09-28T10:00:00.000Z";
 const T2 = "2026-09-28T11:00:00.000Z";
 const T3 = "2026-09-29T09:00:00.000Z";
+const T4 = "2026-09-29T10:00:00.000Z";
 
 const pedido = (nomusId: number, extra: Partial<PedidoNomus> = {}): PedidoNomus => ({
   nomusId,
@@ -42,7 +43,7 @@ test("exportar → importar num banco vazio reproduz TODOS os campos, inclusive 
   const destino = novoRepo();
 
   const r = importar(destino, viaJson(origem), { atualizar: false, agora: T3 });
-  assert.deepEqual(r, { inseridos: 3, atualizados: 0, jaExistiam: 0, historico: 0 });
+  assert.deepEqual(r, { inseridos: 3, atualizados: 0, jaExistiam: 0, historico: 0, puladosPorEdicaoRecente: 0 });
   assert.deepEqual(destino.listar({ incluirFinalizados: true }), origem.listar({ incluirFinalizados: true }));
   assert.equal(destino.listar().length, 2, "o encerrado continua fora da tabela");
 });
@@ -52,7 +53,7 @@ test("importar duas vezes não muda nada na segunda (idempotente)", () => {
   const destino = novoRepo();
   importar(destino, viaJson(origem), { atualizar: true, agora: T3 });
   const r = importar(destino, viaJson(origem), { atualizar: true, agora: T3 });
-  assert.deepEqual(r, { inseridos: 0, atualizados: 0, jaExistiam: 3, historico: 0 });
+  assert.deepEqual(r, { inseridos: 0, atualizados: 0, jaExistiam: 3, historico: 0, puladosPorEdicaoRecente: 0 });
 });
 
 test("sem --atualizar, pedido que já existe no destino NÃO é sobrescrito", () => {
@@ -62,7 +63,7 @@ test("sem --atualizar, pedido que já existe no destino NÃO é sobrescrito", ()
   destino.atualizarTratativa(2001, { statusPcp: "EXPEDIÇÃO", responsavel: "Carlos" }, T2);
 
   const r = importar(destino, viaJson(origem), { atualizar: false, agora: T3 });
-  assert.deepEqual(r, { inseridos: 2, atualizados: 0, jaExistiam: 1, historico: 0 });
+  assert.deepEqual(r, { inseridos: 2, atualizados: 0, jaExistiam: 1, historico: 0, puladosPorEdicaoRecente: 0 });
   assert.equal(destino.buscar(2001)!.statusPcp, "EXPEDIÇÃO", "o que já estava no destino fica");
   assert.equal(destino.buscar(2001)!.responsavel, "Carlos");
 });
@@ -207,4 +208,56 @@ test("exportar funciona num banco de formato ANTIGO (sem a tabela de histórico)
   assert.deepEqual(arquivo.historico, []);
   const tabelas = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => (r as { name: string }).name);
   assert.ok(!tabelas.includes("historico_pedidos"), "o export não alterou o banco");
+});
+
+// ---------------------------------------------------------------- proteção: não sobrescrever edição ao vivo
+
+test("edição feita DEPOIS do exportadoEm não é sobrescrita pelo --atualizar (mas é contada)", () => {
+  const arquivo = viaJson(origemPreenchida()); // exportadoEm = T3
+
+  const destino = novoRepo();
+  destino.inserirNovos([pedido(2001)], T1);
+  destino.atualizarTratativa(2001, { statusPcp: "EXPEDIÇÃO", responsavel: "Zeca" }, T4); // edição ao vivo, depois do backup
+
+  const r = importar(destino, arquivo, { atualizar: true, agora: T4 });
+  assert.equal(r.puladosPorEdicaoRecente, 1);
+  assert.equal(r.atualizados, 0);
+  assert.equal(r.inseridos, 2, "os outros pedidos do arquivo, que não existiam, entram normalmente");
+
+  const p = destino.buscar(2001)!;
+  assert.equal(p.statusPcp, "EXPEDIÇÃO", "a edição ao vivo, mais nova que o backup, fica");
+  assert.equal(p.responsavel, "Zeca");
+});
+
+test("edição feita ANTES do exportadoEm é sobrescrita normalmente (o backup é mais novo)", () => {
+  const arquivo = viaJson(origemPreenchida()); // exportadoEm = T3; pedido 2001 = EM PRODUÇÃO
+
+  const destino = novoRepo();
+  destino.inserirNovos([pedido(2001)], T1);
+  destino.atualizarTratativa(2001, { statusPcp: "EXPEDIÇÃO" }, T2); // T2 é ANTES de T3
+
+  const r = importar(destino, arquivo, { atualizar: true, agora: T4 });
+  assert.equal(r.puladosPorEdicaoRecente, 0);
+  assert.equal(r.atualizados, 1);
+  assert.equal(destino.buscar(2001)!.statusPcp, "EM PRODUÇÃO");
+});
+
+test("pedido nunca editado (atualizadoManualEm nulo) é sempre atualizado, não conta como pulado", () => {
+  const arquivo = viaJson(origemPreenchida());
+  const destino = novoRepo();
+  destino.inserirNovos([pedido(2001, { prazoEntrega: "2026-01-01" })], T1);
+
+  const r = importar(destino, arquivo, { atualizar: true, agora: T4 });
+  assert.equal(r.puladosPorEdicaoRecente, 0);
+  assert.equal(r.atualizados, 1);
+  assert.equal(destino.buscar(2001)!.statusPcp, "EM PRODUÇÃO");
+});
+
+test("arquivo sem exportadoEm válido é recusado, nada é gravado", () => {
+  const base = { versao: 1 as const, pedidos: [] as unknown[] };
+  for (const ruim of [undefined, null, 123, "", "não é uma data"]) {
+    const destino = novoRepo();
+    assert.throws(() => importar(destino, { ...base, exportadoEm: ruim }, { atualizar: false, agora: T3 }), /exportadoEm/, JSON.stringify(ruim));
+    assert.equal(destino.contar(), 0);
+  }
 });

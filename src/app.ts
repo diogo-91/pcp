@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import { fileURLToPath } from "node:url";
-import { montarPedido, montarResumo } from "./apresentacao";
+import { montarPedido, montarResumo, separarMuitoAtrasados } from "./apresentacao";
 import { ACAO_STATUS, ATENDIMENTO_OPCOES, STATUS_PCP, STATUS_PCP_FINAIS } from "./constants";
 import { LimitadorPorJanela } from "./limite";
 import { hojeEmSaoPaulo } from "./prazo";
@@ -102,13 +102,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   app.get("/api/pedidos", async (request) => {
-    const { finalizados } = request.query as { finalizados?: string };
+    const { finalizados, antigos } = request.query as { finalizados?: string; antigos?: string };
     const hoje = hojeEmSaoPaulo(agora());
-    const pedidos = repo.listar({ incluirFinalizados: finalizados === "1" }).map((row) => montarPedido(row, hoje));
+    const todos = repo.listar({ incluirFinalizados: finalizados === "1" }).map((row) => montarPedido(row, hoje));
+
+    // Por padrão, pedido muito atrasado (90+ dias) some do painel: ?antigos=1 traz de volta pra quem precisar.
+    const { visiveis, ocultos } = separarMuitoAtrasados(todos);
+    const pedidos = antigos === "1" ? todos : visiveis;
 
     return {
       hoje,
       pedidos,
+      ocultosMuitoAtrasados: ocultos.length,
       resumo: montarResumo(pedidos),
       opcoes: {
         statusPcp: STATUS_PCP,

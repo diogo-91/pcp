@@ -33,6 +33,13 @@ export const ACAO_STATUS_PADRAO = "Pendente";
 export const JANELA_ATE_2_DIAS = 2;
 export const JANELA_ATE_5_DIAS = 5;
 
+/**
+ * Pedido não finalizado com mais de tantos dias corridos de atraso some do painel (dashboard e tabela) por padrão:
+ * em geral é pedido antigo represado, nunca encerrado, não uma prioridade real do dia a dia. Continua gravado e
+ * pode ser revisto com `?antigos=1` (botão "Mostrar" na tela).
+ */
+export const JANELA_OCULTAR_ATRASO_DIAS = 90;
+
 export const LIMITES_TEXTO = {
   atendimento: 500,
   responsavel: 100,

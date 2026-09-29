@@ -29,6 +29,10 @@ const estado = {
   filtro: 'todos',
   busca: '',
   status: 'todos',
+  // Pedido não finalizado com mais de 90 dias de atraso some do painel por padrão (é lixo represado, não prioridade
+  // do dia a dia); `antigos` alterna pra trazê-lo de volta. `ocultosMuitoAtrasados` é sempre o total, mesmo trazido.
+  antigos: false,
+  ocultosMuitoAtrasados: 0,
 };
 
 // ---------------------------------------------------------------- API
@@ -228,15 +232,37 @@ function renderTabela() {
 
 function renderTudo() {
   renderTopo();
+  renderAntigos();
   renderDashboard();
   renderFiltroStatus();
   renderTabela();
 }
 
+// ---------------------------------------------------------------- render: pedidos muito atrasados ocultos
+function renderAntigos() {
+  const el = $('chip-antigos');
+  if (estado.antigos) {
+    el.hidden = false;
+    el.className = 'chip-antigos ligado';
+    el.textContent = 'Voltar a ocultar antigos';
+  } else if (estado.ocultosMuitoAtrasados > 0) {
+    el.hidden = false;
+    el.className = 'chip-antigos';
+    el.textContent = `${estado.ocultosMuitoAtrasados.toLocaleString('pt-BR')} pedido(s) c/ 90+ dias de atraso ocultos · Mostrar`;
+  } else {
+    el.hidden = true;
+  }
+}
+
+$('chip-antigos').addEventListener('click', () => {
+  estado.antigos = !estado.antigos;
+  carregar({ silencioso: true });
+});
+
 // ---------------------------------------------------------------- carregar
 async function carregar({ silencioso = false } = {}) {
   try {
-    const dados = await api('/api/pedidos');
+    const dados = await api(`/api/pedidos${estado.antigos ? '?antigos=1' : ''}`);
     Object.assign(estado, dados);
     if ($('aviso').textContent.startsWith('Não foi possível carregar')) aviso('');
     renderTudo();
@@ -282,8 +308,8 @@ async function atualizarPrazoNaTela(tr, p) {
   const celula = tr.querySelector('[data-celula="alerta"]');
   if (celula) celula.innerHTML = tagHtml(p);
   try {
-    const dados = await api('/api/pedidos');
-    Object.assign(estado, { resumo: dados.resumo, sync: dados.sync, hoje: dados.hoje });
+    const dados = await api(`/api/pedidos${estado.antigos ? '?antigos=1' : ''}`);
+    Object.assign(estado, { resumo: dados.resumo, sync: dados.sync, hoje: dados.hoje, ocultosMuitoAtrasados: dados.ocultosMuitoAtrasados });
     for (const novo of dados.pedidos) {
       const atual = estado.pedidos.find((x) => x.nomusId === novo.nomusId);
       if (atual) Object.assign(atual, novo);
@@ -291,6 +317,7 @@ async function atualizarPrazoNaTela(tr, p) {
     if (celula) celula.innerHTML = tagHtml(p);
     renderTopo();
     renderDashboard();
+    renderAntigos();
   } catch {
     /* os indicadores se acertam no próximo recarregamento */
   }

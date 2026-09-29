@@ -23,7 +23,7 @@ try {
   const dados = JSON.parse(readFileSync(caminho, "utf8"));
   const r = importar(repo, dados, { atualizar: flags.includes("--atualizar"), agora: new Date().toISOString() });
   console.log(
-    `Importação concluída: ${r.inseridos} pedidos inseridos, ${r.atualizados} atualizados, ${r.jaExistiam} já existiam (sem mudança); histórico: ${r.historico} inseridos.`
+    `Importação concluída: ${r.inseridos} pedidos inseridos, ${r.atualizados} atualizados, ${r.jaExistiam} já existiam (sem mudança), ${r.puladosPorEdicaoRecente} pulados por edição mais recente que o arquivo; histórico: ${r.historico} inseridos.`
   );
 } catch (erro) {
   console.error(`Falhou: ${erro instanceof Error ? erro.message : String(erro)}`);

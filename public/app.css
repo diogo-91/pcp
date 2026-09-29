@@ -54,3 +54,11 @@
 .toast button{flex:none;background:#f3bd30;color:#182536;border:0;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:800}
 .toast button:hover{background:#f7c94f}
 @media(max-width:760px){.toast{bottom:88px}}
+
+/* Botão "N pedidos muito atrasados ocultos" / "Mostrar antigos" na barra superior */
+.chip-antigos{display:flex;align-items:center;gap:7px;font-weight:700;font-size:11px;color:#9a5b12;background:#fff8ea;border:1px solid #f2dfb5;border-radius:24px;padding:7px 11px;transition:background .12s,border-color .12s}
+.chip-antigos:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#e5a12f;box-shadow:0 0 0 3px #e5a12f20;flex:none}
+.chip-antigos:hover{background:#fff2d2;border-color:#e9ca71}
+.chip-antigos.ligado{color:#26394e;background:#eaf0f6;border-color:#dce4ec}
+.chip-antigos.ligado:before{background:#7c8da1;box-shadow:0 0 0 3px #7c8da120}
+@media(max-width:760px){.chip-antigos{font-size:10px;padding:6px 9px}}

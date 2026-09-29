@@ -181,3 +181,43 @@ test("sem ACCESS_TOKEN a API é aberta (uso local)", async () => {
   const { app } = await montar("");
   assert.equal((await app.inject({ method: "GET", url: "/api/pedidos" })).statusCode, 200);
 });
+
+// ---------------------------------------------------------------- pedidos muito atrasados (90+ dias) somem do painel
+
+test("pedido com mais de 90 dias de atraso some do painel por padrão, mas ?antigos=1 traz de volta", async () => {
+  const { app, repo } = await montar();
+  // AGORA = 2026-09-28. 90 dias atrás = 2026-06-30; 91 dias (fora da janela) = 2026-06-29.
+  repo.inserirNovos(
+    [
+      { nomusId: 9001, numero: 9001, codigoPedido: "PD 09001", clienteId: 1, clienteNome: "Bem Atrasado", telefone: "", prazoEntrega: "2026-06-29" },
+      { nomusId: 9002, numero: 9002, codigoPedido: "PD 09002", clienteId: 1, clienteNome: "No Limite", telefone: "", prazoEntrega: "2026-06-30" },
+    ],
+    AGORA.toISOString()
+  );
+
+  const padrao = (await app.inject({ method: "GET", url: "/api/pedidos" })).json() as { pedidos: PedidoPcp[]; ocultosMuitoAtrasados: number; resumo: Record<string, number> };
+  assert.ok(!padrao.pedidos.some((p) => p.nomusId === 9001), "91 dias de atraso: oculto");
+  assert.ok(padrao.pedidos.some((p) => p.nomusId === 9002), "exatamente 90 dias: ainda visível");
+  assert.equal(padrao.ocultosMuitoAtrasados, 1);
+  assert.equal(padrao.resumo.atrasado, 3, "2001, 2002 e o de 90 dias contam; o de 91 não");
+
+  const antigos = (await app.inject({ method: "GET", url: "/api/pedidos?antigos=1" })).json() as { pedidos: PedidoPcp[]; ocultosMuitoAtrasados: number };
+  assert.ok(antigos.pedidos.some((p) => p.nomusId === 9001), "com ?antigos=1 ele volta a aparecer");
+  assert.equal(antigos.ocultosMuitoAtrasados, 1, "o total de ocultos ainda é informado, mesmo trazendo-os");
+});
+
+test("pedido muito atrasado mas ENCERRADO/CANCELADO não conta como oculto (já sai da tela pelo status)", async () => {
+  const { app, repo } = await montar();
+  repo.inserirNovos(
+    [{ nomusId: 9003, numero: 9003, codigoPedido: "PD 09003", clienteId: 1, clienteNome: "Antigo Encerrado", telefone: "", prazoEntrega: "2026-01-01" }],
+    AGORA.toISOString()
+  );
+  await app.inject({ method: "PATCH", url: "/api/pedidos/9003", payload: { statusPcp: "ENCERRADO" } });
+
+  const corpo = (await app.inject({ method: "GET", url: "/api/pedidos" })).json() as { ocultosMuitoAtrasados: number };
+  assert.equal(corpo.ocultosMuitoAtrasados, 0);
+
+  const comFinalizados = (await app.inject({ method: "GET", url: "/api/pedidos?finalizados=1" })).json() as { pedidos: PedidoPcp[]; ocultosMuitoAtrasados: number };
+  assert.ok(comFinalizados.pedidos.some((p) => p.nomusId === 9003), "finalizado antigo aparece normalmente em ?finalizados=1");
+  assert.equal(comFinalizados.ocultosMuitoAtrasados, 0);
+});

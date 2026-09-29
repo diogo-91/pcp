@@ -41,6 +41,7 @@ Se o código do status mudar, ajuste `NOMUS_STATUS_LIBERADO`. Uma varredura leva
 
 - **Dashboard → tabela:** clicar em qualquer pedido do dashboard (fila prioritária ou listas por prazo) abre esse pedido na tabela: limpa filtros que o escondam, rola até a linha e a destaca por alguns segundos.
 - **Finalizar um pedido:** marque o status como **ENCERRADO** (ou **CANCELADO**). Ele sai da tabela, mas **continua gravado no banco**. Um aviso com **Desfazer** fica por 12 segundos para o caso de engano; depois disso, só pela API/banco (`GET /api/pedidos?finalizados=1` lista os finalizados).
+- **Pedido muito atrasado some do painel:** um pedido não finalizado com mais de `JANELA_OCULTAR_ATRASO_DIAS` (padrão: **90**) dias corridos de atraso fica oculto por padrão, no dashboard e na tabela — em geral é pedido antigo represado, não uma prioridade do dia a dia. Continua gravado e contado; a barra superior mostra "N pedido(s) c/ 90+ dias de atraso ocultos · Mostrar", e o botão alterna para trazê-los de volta (`GET /api/pedidos?antigos=1`). Um pedido ENCERRADO/CANCELADO nunca conta como "oculto" por este motivo — ele já sai da tela pelo status.
 
 ## Deploy no EasyPanel
 
@@ -81,6 +82,7 @@ npm run importar -- /tmp/backup.json --atualizar
 ```
 
 - `--atualizar`: pedidos que já existem (por exemplo, os que a sincronização já trouxe) recebem status, prazo, atendimento, responsável e plano de ação do arquivo. **Nome, telefone e código nunca são alterados.** Sem a flag, só entram pedidos que ainda não existem.
+- **Não sobrescreve uma edição feita depois do backup:** se alguém já ajustou aquele pedido no sistema (na tela) depois do momento em que o arquivo foi gerado (`exportadoEm`), a importação pula esse pedido (conta em `puladosPorEdicaoRecente`) em vez de apagar um trabalho mais novo. Gere o backup **na hora da virada**, e verifique esse número no resultado: se vier maior que zero, confira manualmente se aqueles pedidos precisam do valor do arquivo mesmo assim.
 - O arquivo é validado inteiro antes de gravar qualquer coisa, a importação é uma transação única e **nunca apaga nada**. Rodar de novo não muda nada.
 - O JSON tem nomes e telefones de clientes: não o publique nem o guarde em lugar aberto. Apague-o depois.
 - Refaça o `exportar` **na hora da virada**: qualquer alteração feita no banco local depois do backup não estará nele.
@@ -91,7 +93,7 @@ npm run importar -- /tmp/backup.json --atualizar
 
 | Rota | O que faz |
 |---|---|
-| `GET /api/pedidos` | Pedidos da tabela, resumo por faixa de prazo, opções dos selects e estado da sincronização. `?finalizados=1` inclui encerrados/cancelados. |
+| `GET /api/pedidos` | Pedidos da tabela, resumo por faixa de prazo, `ocultosMuitoAtrasados` (quantos somem por atraso de 90+ dias), opções dos selects e estado da sincronização. `?finalizados=1` inclui encerrados/cancelados; `?antigos=1` inclui os muito atrasados. |
 | `PATCH /api/pedidos/:id` | Grava campos editáveis: `prazoEntrega`, `statusPcp`, `atendimento`, `responsavel`, `acao`, `prazoAcao`, `acaoStatus`. Datas AAAA-MM-DD entre 2000 e 2100 (vazio limpa). Número do pedido, cliente e telefone são recusados. |
 | `POST /api/sync` | Dispara a sincronização em segundo plano (202). |
 | `GET /api/sync` | Estado e histórico da última sincronização. |

@@ -18,6 +18,11 @@ export interface ResultadoImportacao {
   jaExistiam: number;
   /** Pedidos do histórico inseridos (os que já existiam são ignorados). */
   historico: number;
+  /**
+   * Pedidos que já existiam e tinham sido editados no sistema DEPOIS que este arquivo foi gerado (`exportadoEm`):
+   * não foram tocados, para não apagar um trabalho ao vivo mais novo que o backup.
+   */
+  puladosPorEdicaoRecente: number;
 }
 
 export function exportar(repo: PcpRepository, agora: string): ArquivoMigracao {
@@ -69,8 +74,11 @@ function motivoHistoricoInvalido(h: unknown): string | null {
  */
 export function importar(repo: PcpRepository, dados: unknown, opcoes: { atualizar: boolean; agora: string }): ResultadoImportacao {
   if (typeof dados !== "object" || dados === null) throw new Error("Arquivo inválido: não é um JSON de backup.");
-  const arquivo = dados as { versao?: unknown; pedidos?: unknown; historico?: unknown };
+  const arquivo = dados as { versao?: unknown; exportadoEm?: unknown; pedidos?: unknown; historico?: unknown };
   if (arquivo.versao !== 1) throw new Error(`Arquivo inválido: versão ${String(arquivo.versao)} não suportada (esperado 1).`);
+  if (typeof arquivo.exportadoEm !== "string" || Number.isNaN(Date.parse(arquivo.exportadoEm))) {
+    throw new Error("Arquivo inválido: exportadoEm ausente ou inválido.");
+  }
   if (!Array.isArray(arquivo.pedidos)) throw new Error("Arquivo inválido: falta a lista de pedidos.");
 
   if (arquivo.historico !== undefined && !Array.isArray(arquivo.historico)) throw new Error("Arquivo inválido: o histórico deve ser uma lista.");
@@ -85,7 +93,8 @@ export function importar(repo: PcpRepository, dados: unknown, opcoes: { atualiza
   if (invalidos.length > 0) throw new Error(`Arquivo inválido, nada foi importado. ${invalidos.join("; ")}`);
 
   const pedidos = arquivo.pedidos as PedidoRow[];
-  const resultado: ResultadoImportacao = { inseridos: 0, atualizados: 0, jaExistiam: 0, historico: 0 };
+  const exportadoEm = arquivo.exportadoEm as string;
+  const resultado: ResultadoImportacao = { inseridos: 0, atualizados: 0, jaExistiam: 0, historico: 0, puladosPorEdicaoRecente: 0 };
 
   repo.transacao(() => {
     for (const h of (arquivo.historico ?? []) as HistoricoRow[]) {
@@ -102,6 +111,13 @@ export function importar(repo: PcpRepository, dados: unknown, opcoes: { atualiza
       }
       if (!opcoes.atualizar) {
         resultado.jaExistiam++;
+        continue;
+      }
+
+      // Não sobrescreve uma edição feita no sistema DEPOIS que este arquivo foi gerado: ela é mais nova que o
+      // backup, então aplicar o backup por cima apagaria um ajuste ao vivo (ex.: alguém corrigiu o prazo agora).
+      if (atual.atualizadoManualEm && atual.atualizadoManualEm > exportadoEm) {
+        resultado.puladosPorEdicaoRecente++;
         continue;
       }
 
