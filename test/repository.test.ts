@@ -27,7 +27,7 @@ test("inserirNovos cria os pedidos com a tratativa em valores padrão", () => {
   const p = repo.buscar(2001)!;
   assert.equal(p.clienteNome, "Cliente 2001");
   assert.equal(p.prazoEntrega, "2026-10-10");
-  assert.equal(p.statusPcp, "AGUARDANDO");
+  assert.equal(p.statusPcp, "PEDIDO LIBERADO");
   assert.equal(p.acaoStatus, "Pendente");
   assert.equal(p.atendimento, "");
   assert.equal(p.primeiroVistoEm, T1);

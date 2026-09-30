@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { STATUS_PCP_FINAIS } from "./constants";
+import { ACAO_STATUS_PADRAO, STATUS_PCP_FINAIS, STATUS_PCP_PADRAO } from "./constants";
 import { inTransaction } from "./db";
 import type { HistoricoRow, PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
 
@@ -75,17 +75,22 @@ export class PcpRepository {
    * nunca é desfeito. Devolve quantos foram realmente incluídos.
    */
   inserirNovos(pedidos: PedidoNomus[], agora: string): number {
+    // status_pcp e acao_status vêm explícitos aqui (não do DEFAULT da coluna): um banco já criado antes de uma
+    // mudança em STATUS_PCP_PADRAO/ACAO_STATUS_PADRAO manteria o valor antigo gravado no próprio schema do SQLite.
     const inserir = this.db.prepare(`
       INSERT INTO pedidos (nomus_id, numero, codigo_pedido, cliente_id, cliente_nome, telefone,
-                           prazo_entrega, primeiro_visto_em, atualizado_nomus_em)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           prazo_entrega, primeiro_visto_em, atualizado_nomus_em, status_pcp, acao_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(nomus_id) DO NOTHING
     `);
 
     return inTransaction(this.db, () => {
       let incluidos = 0;
       for (const p of pedidos) {
-        const r = inserir.run(p.nomusId, p.numero, p.codigoPedido, p.clienteId, p.clienteNome, p.telefone, p.prazoEntrega, agora, agora);
+        const r = inserir.run(
+          p.nomusId, p.numero, p.codigoPedido, p.clienteId, p.clienteNome, p.telefone, p.prazoEntrega, agora, agora,
+          STATUS_PCP_PADRAO, ACAO_STATUS_PADRAO
+        );
         incluidos += Number(r.changes);
       }
       return incluidos;

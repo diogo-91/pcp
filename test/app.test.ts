@@ -221,3 +221,24 @@ test("pedido muito atrasado mas ENCERRADO/CANCELADO não conta como oculto (já 
   assert.ok(comFinalizados.pedidos.some((p) => p.nomusId === 9003), "finalizado antigo aparece normalmente em ?finalizados=1");
   assert.equal(comFinalizados.ocultosMuitoAtrasados, 0);
 });
+
+// ---------------------------------------------------------------- status: sem AGUARDANDO, padrão é PEDIDO LIBERADO
+
+test("AGUARDANDO não é mais um status válido; PEDIDO LIBERADO é o padrão de um pedido novo", async () => {
+  const { app, repo } = await montar();
+  repo.inserirNovos(
+    [{ nomusId: 9101, numero: 9101, codigoPedido: "PD 09101", clienteId: 1, clienteNome: "Recém-chegado", telefone: "", prazoEntrega: "2026-10-15" }],
+    AGORA.toISOString()
+  );
+
+  const corpo = (await app.inject({ method: "GET", url: "/api/pedidos" })).json() as { pedidos: PedidoPcp[]; opcoes: { statusPcp: string[] } };
+  assert.ok(!corpo.opcoes.statusPcp.includes("AGUARDANDO"), "não é mais oferecido como opção");
+  assert.deepEqual(corpo.opcoes.statusPcp, ["PEDIDO LIBERADO", "EM PRODUÇÃO", "EXPEDIÇÃO", "ROTA DE ENTREGA", "ENCERRADO", "CANCELADO"]);
+
+  const novo = corpo.pedidos.find((p) => p.nomusId === 9101)!;
+  assert.equal(novo.statusPcp, "PEDIDO LIBERADO", "pedido recém-sincronizado já nasce como Pedido Liberado");
+
+  const patch = await app.inject({ method: "PATCH", url: "/api/pedidos/9101", payload: { statusPcp: "AGUARDANDO" } as never });
+  assert.equal(patch.statusCode, 400, "não dá mais pra voltar um pedido pra AGUARDANDO");
+  assert.equal(repo.buscar(9101)!.statusPcp, "PEDIDO LIBERADO", "nada mudou");
+});
