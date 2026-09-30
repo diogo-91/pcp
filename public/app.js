@@ -17,7 +17,7 @@ const NOMES_FILTRO = {
   semdata: 'Sem prazo definido',
 };
 const CLASSE_TAG = { atrasado: 'late', ate2: 'soon', de3a5: 'near', normal: 'undated', semdata: 'undated' };
-const COR_STATUS = { 'AGUARDANDO': 'gray', 'PEDIDO LIBERADO': 'green', 'EM PRODUÇÃO': 'amber', 'EXPEDIÇÃO': 'blue', 'ROTA DE ENTREGA': 'purple', 'ENCERRADO': 'red', 'CANCELADO': 'violet' };
+const COR_STATUS = { 'PEDIDO LIBERADO': 'green', 'AGUARDANDO MEDIDA': 'gray', 'EM PRODUÇÃO': 'amber', 'EXPEDIÇÃO': 'blue', 'ROTA DE ENTREGA': 'purple', 'ENCERRADO': 'red', 'CANCELADO': 'violet' };
 const COR_ATENDIMENTO = { 'Atendimento aberto': 'gray', 'Aguardando compras': 'green', 'Aguardado programação': 'amber', 'Aguardando produção': 'blue', 'Em Analise': 'purple', 'Aguardando retorno': 'red', 'Resolvido': 'gray' };
 
 const estado = {

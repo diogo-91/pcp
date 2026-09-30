@@ -233,7 +233,7 @@ test("AGUARDANDO não é mais um status válido; PEDIDO LIBERADO é o padrão de
 
   const corpo = (await app.inject({ method: "GET", url: "/api/pedidos" })).json() as { pedidos: PedidoPcp[]; opcoes: { statusPcp: string[] } };
   assert.ok(!corpo.opcoes.statusPcp.includes("AGUARDANDO"), "não é mais oferecido como opção");
-  assert.deepEqual(corpo.opcoes.statusPcp, ["PEDIDO LIBERADO", "EM PRODUÇÃO", "EXPEDIÇÃO", "ROTA DE ENTREGA", "ENCERRADO", "CANCELADO"]);
+  assert.deepEqual(corpo.opcoes.statusPcp, ["PEDIDO LIBERADO", "AGUARDANDO MEDIDA", "EM PRODUÇÃO", "EXPEDIÇÃO", "ROTA DE ENTREGA", "ENCERRADO", "CANCELADO"]);
 
   const novo = corpo.pedidos.find((p) => p.nomusId === 9101)!;
   assert.equal(novo.statusPcp, "PEDIDO LIBERADO", "pedido recém-sincronizado já nasce como Pedido Liberado");
@@ -241,4 +241,15 @@ test("AGUARDANDO não é mais um status válido; PEDIDO LIBERADO é o padrão de
   const patch = await app.inject({ method: "PATCH", url: "/api/pedidos/9101", payload: { statusPcp: "AGUARDANDO" } as never });
   assert.equal(patch.statusCode, 400, "não dá mais pra voltar um pedido pra AGUARDANDO");
   assert.equal(repo.buscar(9101)!.statusPcp, "PEDIDO LIBERADO", "nada mudou");
+});
+
+test("AGUARDANDO MEDIDA é um status válido, aparece nas opções e pode ser salvo num pedido", async () => {
+  const { app, repo } = await montar();
+  const corpo = (await app.inject({ method: "GET", url: "/api/pedidos" })).json() as { opcoes: { statusPcp: string[] } };
+  assert.ok(corpo.opcoes.statusPcp.includes("AGUARDANDO MEDIDA"));
+
+  const patch = await app.inject({ method: "PATCH", url: "/api/pedidos/2003", payload: { statusPcp: "AGUARDANDO MEDIDA" } as never });
+  assert.equal(patch.statusCode, 200);
+  assert.equal((patch.json() as PedidoPcp).statusPcp, "AGUARDANDO MEDIDA");
+  assert.equal(repo.buscar(2003)!.statusPcp, "AGUARDANDO MEDIDA", "gravado no banco");
 });

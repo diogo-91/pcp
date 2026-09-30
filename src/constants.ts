@@ -2,7 +2,15 @@
  * Fluxo manual do PCP. Sem "AGUARDANDO": todo pedido que entra aqui já é "Liberado" na Nomus (é o próprio filtro
  * da sincronização), então o status do PCP começa direto em PEDIDO LIBERADO.
  */
-export const STATUS_PCP = ["PEDIDO LIBERADO", "EM PRODUÇÃO", "EXPEDIÇÃO", "ROTA DE ENTREGA", "ENCERRADO", "CANCELADO"] as const;
+export const STATUS_PCP = [
+  "PEDIDO LIBERADO",
+  "AGUARDANDO MEDIDA",
+  "EM PRODUÇÃO",
+  "EXPEDIÇÃO",
+  "ROTA DE ENTREGA",
+  "ENCERRADO",
+  "CANCELADO",
+] as const;
 
 /** Pedidos nesses status saem da tabela, mas continuam gravados no banco. */
 export const STATUS_PCP_FINAIS: readonly string[] = ["ENCERRADO", "CANCELADO"];
