@@ -65,6 +65,14 @@ const MIGRATIONS: string[] = [
     importado_em  TEXT NOT NULL
   );
   `,
+  // Programação da produção, vinda do Planejamento do sistema de apontamento (ordens agendadas no calendário).
+  // Não é digitada no PCP nem vem da Nomus: é derivada e reescrita a cada leitura do planejamento, por isso
+  // fica em colunas próprias (a sincronização da Nomus e as edições do PCP nunca passam por elas).
+  // prazo_producao = a data MAIS TARDIA entre as ordens do pedido; producao_itens = JSON [{os, data}].
+  `
+  ALTER TABLE pedidos ADD COLUMN prazo_producao TEXT;
+  ALTER TABLE pedidos ADD COLUMN producao_itens TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

@@ -21,6 +21,9 @@ export interface AppConfig {
    * EasyPanel é 1; atrás de um serviço a mais (ex.: Cloudflare) é 2. Padrão: 1 em produção, 0 fora dela.
    */
   trustProxyHops: number;
+  /** Endereço do sistema de apontamento, de onde vem a programação da produção ("Prazo de produção"). Vazio = desligado. */
+  planejamentoUrl: string;
+  planejamentoIntervalMs: number;
 }
 
 function hopsDoProxy(env: NodeJS.ProcessEnv): number {
@@ -47,6 +50,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     accessToken: env.ACCESS_TOKEN ?? "",
     publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
     trustProxyHops: hopsDoProxy(env),
+    planejamentoUrl: (env.PLANEJAMENTO_URL ?? "").trim(),
+    // O calendário muda ao longo do dia (arrastar ordens); a leitura é leve e o botão "Sincronizar" força uma.
+    planejamentoIntervalMs: Number(env.PLANEJAMENTO_INTERVAL_MS ?? 10 * 60 * 1000),
   };
 }
 

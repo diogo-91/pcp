@@ -29,11 +29,23 @@ export interface Tratativa {
  */
 export type TratativaPatch = Partial<Tratativa> & { prazoEntrega?: string | null };
 
+/** Uma ordem de produção (OS) agendada no calendário do Planejamento. */
+export interface ItemProducao {
+  /** Nome da ordem, ex.: "OS 02218 - 001". */
+  os: string;
+  /** AAAA-MM-DD */
+  data: string;
+}
+
 /** Linha como está no banco. */
 export interface PedidoRow extends PedidoNomus, Tratativa {
   /** Quando o pedido entrou no banco. */
   primeiroVistoEm: string;
   atualizadoManualEm: string | null;
+  /** Data mais tardia entre as ordens do pedido agendadas no Planejamento (AAAA-MM-DD), ou null se não programado. */
+  prazoProducao: string | null;
+  /** As ordens agendadas que originam `prazoProducao`. */
+  producaoItens: ItemProducao[];
 }
 
 /** Linha como o frontend recebe: o alerta de prazo já vem calculado pelo servidor. */
@@ -41,6 +53,8 @@ export interface PedidoPcp extends PedidoRow {
   diasParaPrazo: number | null;
   faixa: FaixaPrazo;
   alerta: string;
+  /** True quando a produção está programada para DEPOIS do prazo de entrega. */
+  producaoAposEntrega: boolean;
 }
 
 export interface Resumo {

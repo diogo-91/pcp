@@ -62,3 +62,21 @@
 .chip-antigos.ligado{color:#26394e;background:#eaf0f6;border-color:#dce4ec}
 .chip-antigos.ligado:before{background:#7c8da1;box-shadow:0 0 0 3px #7c8da120}
 @media(max-width:760px){.chip-antigos{font-size:10px;padding:6px 9px}}
+
+/* Coluna "Prazo de produção" (somente leitura, vinda do Planejamento). As larguras do style.css original são por
+   posição e eram para 11 colunas; refeitas aqui para as 12 atuais (a nova é a 6ª, ao lado do prazo de entrega). */
+.tablewrap table{min-width:1700px}
+.tablewrap th:nth-child(1),.tablewrap td:nth-child(1){min-width:114px}
+.tablewrap th:nth-child(2),.tablewrap td:nth-child(2){min-width:230px}
+.tablewrap th:nth-child(3),.tablewrap td:nth-child(3){min-width:156px}
+.tablewrap th:nth-child(4),.tablewrap td:nth-child(4){min-width:187px}
+.tablewrap th:nth-child(5),.tablewrap td:nth-child(5){min-width:174px}
+.tablewrap th:nth-child(6),.tablewrap td:nth-child(6){min-width:150px}
+.tablewrap th:nth-child(7),.tablewrap td:nth-child(7){min-width:153px}
+.tablewrap th:nth-child(8),.tablewrap td:nth-child(8){min-width:226px}
+.tablewrap th:nth-child(9),.tablewrap td:nth-child(9){min-width:160px}
+.tablewrap th:nth-child(10),.tablewrap td:nth-child(10){min-width:235px}
+.tablewrap th:nth-child(11),.tablewrap td:nth-child(11){min-width:167px}
+.tablewrap th:nth-child(12),.tablewrap td:nth-child(12){min-width:174px}
+.cellro.prod{font-weight:700;font-variant-numeric:tabular-nums;cursor:help}
+.cellro.prod.depois{color:#bb4153}

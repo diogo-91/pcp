@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { montarPedido, montarResumo, separarMuitoAtrasados } from "./apresentacao";
 import { ACAO_STATUS, ATENDIMENTO_OPCOES, STATUS_PCP, STATUS_PCP_FINAIS } from "./constants";
 import { LimitadorPorJanela } from "./limite";
+import type { PlanejamentoService } from "./planejamento";
 import { hojeEmSaoPaulo } from "./prazo";
 import { consultarPedidoPublico } from "./publico";
 import type { PcpRepository } from "./repository";
@@ -14,6 +15,8 @@ import { validarPatch } from "./validation";
 export interface AppDeps {
   repo: PcpRepository;
   sync: SyncService;
+  /** Leitura da programação da produção (Planejamento do apontamento). Opcional: sem ele a coluna fica "não programado". */
+  planejamento?: PlanejamentoService;
   /** Vazio = sem autenticação (uso local). */
   accessToken: string;
   logger?: boolean;
@@ -43,7 +46,7 @@ const confiarNosProxies = (hops: number) => (hops > 0 ? (_endereco: string, indi
 const hash = (valor: string) => createHash("sha256").update(valor).digest();
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { repo, sync, accessToken } = deps;
+  const { repo, sync, planejamento, accessToken } = deps;
   const agora = deps.agora ?? (() => new Date());
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: confiarNosProxies(deps.trustProxyHops ?? 0) });
 
@@ -122,6 +125,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         finais: STATUS_PCP_FINAIS,
       },
       sync: sync.status(),
+      planejamento: planejamento?.status() ?? { configurado: false, ultimaTentativa: null, ultimoSucesso: null, erro: null, pedidosProgramados: 0 },
     };
   });
 
@@ -144,6 +148,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post("/api/sync", async (_request, reply) => {
     const jaExecutando = sync.executando();
     if (!jaExecutando) void sync.executar("manual");
+    void planejamento?.executar(); // a leitura do calendário é rápida: aproveita o clique para atualizar as datas de produção também
     return reply.code(202).send({ executando: true, jaEstavaExecutando: jaExecutando });
   });
 

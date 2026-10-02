@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ACAO_STATUS_PADRAO, STATUS_PCP_FINAIS, STATUS_PCP_PADRAO } from "./constants";
 import { inTransaction } from "./db";
-import type { HistoricoRow, PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
+import type { HistoricoRow, ItemProducao, PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
 
 export interface PessoaCache {
   nomusId: number;
@@ -23,6 +23,19 @@ const COLUNAS_EDITAVEIS: Record<keyof TratativaPatch, string> = {
   prazoEntrega: "prazo_entrega",
 };
 
+/** producao_itens é JSON gravado por nós; se estiver ausente ou corrompido, o pedido só aparece como não programado. */
+function lerItensProducao(bruto: unknown): ItemProducao[] {
+  if (typeof bruto !== "string" || bruto === "") return [];
+  try {
+    const lista = JSON.parse(bruto) as unknown;
+    return Array.isArray(lista)
+      ? lista.filter((i): i is ItemProducao => typeof i?.os === "string" && typeof i?.data === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 const paraPedidoRow = (l: Linha): PedidoRow => ({
   nomusId: l.nomus_id as number,
   numero: l.numero as number,
@@ -39,6 +52,8 @@ const paraPedidoRow = (l: Linha): PedidoRow => ({
   prazoAcao: (l.prazo_acao as string | null) ?? null,
   acaoStatus: l.acao_status as string,
   atualizadoManualEm: (l.atualizado_manual_em as string | null) ?? null,
+  prazoProducao: (l.prazo_producao as string | null) ?? null,
+  producaoItens: lerItensProducao(l.producao_itens),
 });
 
 const paraHistorico = (l: Linha): HistoricoRow => ({
@@ -121,6 +136,46 @@ export class PcpRepository {
         p.statusPcp, p.atendimento, p.responsavel, p.acao, p.prazoAcao, p.acaoStatus, p.atualizadoManualEm
       );
     return Number(r.changes) === 1;
+  }
+
+  /**
+   * Reescreve a programação da produção de TODOS os pedidos: quem está no mapa recebe a data e as ordens; quem não
+   * está volta a "não programado" (foi tirado do calendário). Mexe SÓ em prazo_producao/producao_itens — nunca em
+   * dado da Nomus nem do PCP, e não conta como edição manual. Devolve quantos pedidos mudaram.
+   */
+  aplicarProducao(programacao: Map<number, { prazoProducao: string; itens: ItemProducao[] }>): number {
+    const atuais = this.db.prepare("SELECT nomus_id, prazo_producao, producao_itens FROM pedidos").all() as Linha[];
+    const atualizar = this.db.prepare("UPDATE pedidos SET prazo_producao = ?, producao_itens = ? WHERE nomus_id = ?");
+
+    return inTransaction(this.db, () => {
+      let mudaram = 0;
+      for (const l of atuais) {
+        const alvo = programacao.get(l.nomus_id as number);
+        const novoPrazo = alvo?.prazoProducao ?? null;
+        const novosItens = alvo ? JSON.stringify(alvo.itens) : null;
+        const antigoPrazo = (l.prazo_producao as string | null) ?? null;
+        const antigosItens = (l.producao_itens as string | null) ?? null;
+
+        if (novoPrazo === antigoPrazo && novosItens === antigosItens) continue;
+        atualizar.run(novoPrazo, novosItens, l.nomus_id as number);
+        mudaram++;
+      }
+      return mudaram;
+    });
+  }
+
+  /** Quantos pedidos têm hoje uma programação de produção gravada. */
+  contarProgramados(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM pedidos WHERE prazo_producao IS NOT NULL").get() as { n: number };
+    return row.n;
+  }
+
+  /** Todos os pedidos (id, número) para casar com o Planejamento, inclusive os já encerrados. */
+  idsENumeros(): Array<{ nomusId: number; numero: number }> {
+    return (this.db.prepare("SELECT nomus_id, numero FROM pedidos").all() as Linha[]).map((l) => ({
+      nomusId: l.nomus_id as number,
+      numero: l.numero as number,
+    }));
   }
 
   contar(): number {

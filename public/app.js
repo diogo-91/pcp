@@ -176,6 +176,18 @@ const dataHtml = (p, campo, rotulo) =>
   `<div class="datecell"><input class="sheetcell" type="date" data-campo="${campo}" value="${esc(p[campo] ?? '')}" aria-label="${rotulo} do pedido ${esc(p.codigoPedido)}">
     <button type="button" class="limpar" data-limpar="${campo}" title="Limpar data" aria-label="Limpar ${rotulo} do pedido ${esc(p.codigoPedido)}">×</button></div>`;
 
+// Prazo de produção: data em que as ordens do pedido estão agendadas no Planejamento do apontamento (somente leitura).
+// Com mais de uma ordem vale a mais tardia; o texto ao passar o mouse lista cada ordem com o seu dia.
+function producaoHtml(p) {
+  if (!p.prazoProducao) {
+    return '<span class="cellro vazio" title="Nenhuma ordem deste pedido está agendada no Planejamento">Não programado</span>';
+  }
+  const depois = p.producaoAposEntrega;
+  const itens = (p.producaoItens || []).map((i) => `${i.os}: ${fmtData(i.data)}`).join('\n');
+  const titulo = (depois ? 'Produção programada DEPOIS do prazo de entrega\n' : '') + itens;
+  return `<span class="cellro prod${depois ? ' depois' : ''}" title="${esc(titulo)}">${esc(fmtData(p.prazoProducao))}${depois ? ' ⚠' : ''}</span>`;
+}
+
 function linhaHtml(p) {
   return `<tr data-id="${p.nomusId}">
     <td><span class="cellro"><strong>${esc(p.codigoPedido)}</strong></span></td>
@@ -183,6 +195,7 @@ function linhaHtml(p) {
     <td>${somenteLeitura(p.telefone, 'Sem telefone')}</td>
     <td>${selectHtml(p, 'statusPcp', estado.opcoes.statusPcp, COR_STATUS, 'Status')}</td>
     <td>${dataHtml(p, 'prazoEntrega', 'Prazo de entrega')}</td>
+    <td data-celula="producao">${producaoHtml(p)}</td>
     <td data-celula="alerta">${tagHtml(p)}</td>
     <td>${selectHtml(p, 'atendimento', estado.opcoes.atendimento, COR_ATENDIMENTO, 'Atendimento')}</td>
     <td>${inputHtml(p, 'responsavel', 'text', 'Responsável')}</td>
@@ -221,10 +234,20 @@ function renderTabela() {
   const { scrollTop, scrollLeft } = wrap;
   const lista = pedidosVisiveis();
 
-  $('linhas').innerHTML = lista.length ? lista.map(linhaHtml).join('') : `<tr><td colspan="11" class="vazio-tabela">${mensagemVazia()}</td></tr>`;
+  $('linhas').innerHTML = lista.length ? lista.map(linhaHtml).join('') : `<tr><td colspan="12" class="vazio-tabela">${mensagemVazia()}</td></tr>`;
   $('contagem').textContent = `${lista.length.toLocaleString('pt-BR')} de ${estado.pedidos.length.toLocaleString('pt-BR')} pedidos`;
   $('chip-filtro').textContent = NOMES_FILTRO[estado.filtro] || NOMES_FILTRO.todos;
-  $('faixa-info').textContent = estado.hoje ? `Prazos calculados em ${fmtData(estado.hoje)}` : '';
+  const pl = estado.planejamento;
+  const textoProducao = !pl
+    ? ''
+    : !pl.configurado
+      ? 'Prazo de produção: Planejamento não conectado'
+      : pl.erro
+        ? `Prazo de produção: falha ao ler o Planejamento (${pl.erro}); mostrando a última leitura`
+        : pl.ultimoSucesso
+          ? `Prazo de produção lido do Planejamento em ${fmtHora(pl.ultimoSucesso)}`
+          : 'Prazo de produção: ainda não lido';
+  $('faixa-info').textContent = [estado.hoje ? `Prazos calculados em ${fmtData(estado.hoje)}` : '', textoProducao].filter(Boolean).join(' · ');
 
   wrap.scrollTop = scrollTop;
   wrap.scrollLeft = scrollLeft;
@@ -307,6 +330,9 @@ let salvandoAgora = 0;
 async function atualizarPrazoNaTela(tr, p) {
   const celula = tr.querySelector('[data-celula="alerta"]');
   if (celula) celula.innerHTML = tagHtml(p);
+  // Mudar o prazo de entrega muda o aviso "produção depois da entrega" da célula vizinha.
+  const celulaProducao = tr.querySelector('[data-celula="producao"]');
+  if (celulaProducao) celulaProducao.innerHTML = producaoHtml(p);
   try {
     const dados = await api(`/api/pedidos${estado.antigos ? '?antigos=1' : ''}`);
     Object.assign(estado, { resumo: dados.resumo, sync: dados.sync, hoje: dados.hoje, ocultosMuitoAtrasados: dados.ocultosMuitoAtrasados });

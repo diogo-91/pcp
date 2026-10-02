@@ -102,6 +102,20 @@ npm run importar -- /tmp/backup.json --atualizar
 
 Com `ACCESS_TOKEN`, as rotas `/api/*` (exceto health) exigem o header `x-pcp-token`.
 
+## Prazo de produção (programação do Planejamento)
+
+A coluna **Prazo de produção** (ao lado do prazo de entrega) mostra a data em que as ordens do pedido estão agendadas no **Planejamento** do sistema de apontamento (o calendário onde o PCP arrasta as ordens para o dia de produzir).
+
+- **Fonte:** `GET /api/planejamento` do sistema de apontamento (`PLANEJAMENTO_URL`, ex.: `https://apontamento.seudominio.com`). Cada item do calendário traz o `idPedido` da Nomus, que é o `nomusId` da tabela daqui; se o id não casar, tenta pelo número do pedido (`PD 01279` → 1279).
+- **Somente leitura:** nada é escrito no Planejamento, e a célula não é editável aqui. Para mudar a data, arraste a ordem no calendário do apontamento.
+- **Várias ordens no mesmo pedido:** vale a data **mais tardia** (quando a produção termina de ser programada); ao passar o mouse na célula aparece cada ordem com o seu dia.
+- **Aviso ⚠ em vermelho:** a produção está programada para **depois** do prazo de entrega (no mesmo dia não conta).
+- **"Não programado":** nenhuma ordem do pedido está no calendário. Se a ordem for tirada do calendário, o pedido volta a "Não programado" na leitura seguinte.
+- **Atualização:** a cada 10 min (`PLANEJAMENTO_INTERVAL_MS`) e quando alguém clica em **Sincronizar**. O rodapé da tabela informa quando foi a última leitura.
+- **Falha não apaga nada:** se o apontamento estiver fora do ar, responder lixo ou devolver a lista **vazia** de repente (ele sobe vazio se o arquivo do planejamento estiver ilegível), a tela mantém a última programação lida e avisa no rodapé.
+- **Fica separado do resto:** a leitura só escreve nas colunas `prazo_producao` e `producao_itens`; nunca altera dados da Nomus nem o que o PCP digitou, e não conta como edição manual.
+- Sem `PLANEJAMENTO_URL` o recurso fica desligado e a coluna mostra "Não programado".
+
 ## Consulta pública (site dos clientes)
 
 O site da Gferro consulta o andamento de um pedido por `GET /api/publico/pedido?pedido=917`. A rota responde **no mesmo formato** que o Google Apps Script devolvia, então o site só precisa apontar a `ORDER_API_URL` para ela:

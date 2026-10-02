@@ -6,7 +6,9 @@ import type { PedidoPcp, PedidoRow, Resumo } from "./types";
 export function montarPedido(row: PedidoRow, hoje: string): PedidoPcp {
   const dias = row.prazoEntrega ? diasEntre(hoje, row.prazoEntrega) : null;
   const faixa = faixaDoPrazo(dias);
-  return { ...row, diasParaPrazo: dias, faixa, alerta: textoAlerta(faixa, dias) };
+  // Datas AAAA-MM-DD comparam certo como texto. Só vale quando as duas existem.
+  const producaoAposEntrega = !!row.prazoProducao && !!row.prazoEntrega && row.prazoProducao > row.prazoEntrega;
+  return { ...row, diasParaPrazo: dias, faixa, alerta: textoAlerta(faixa, dias), producaoAposEntrega };
 }
 
 /** Contagem por PEDIDO (a planilha antiga contava linhas, então cada pedido aparecia em dobro). */
