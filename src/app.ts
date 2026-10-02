@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { montarPedido, montarResumo, separarMuitoAtrasados } from "./apresentacao";
 import { ACAO_STATUS, ATENDIMENTO_OPCOES, STATUS_PCP, STATUS_PCP_FINAIS } from "./constants";
 import { LimitadorPorJanela } from "./limite";
+import { paginaInicial } from "./pagina";
 import type { PlanejamentoService } from "./planejamento";
 import { hojeEmSaoPaulo } from "./prazo";
 import { consultarPedidoPublico } from "./publico";
@@ -148,13 +149,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post("/api/sync", async (_request, reply) => {
     const jaExecutando = sync.executando();
     if (!jaExecutando) void sync.executar("manual");
-    void planejamento?.executar(); // a leitura do calendário é rápida: aproveita o clique para atualizar as datas de produção também
+    void planejamento?.executar(); // roda em segundo plano (~13 s): o clique também atualiza as datas de produção
     return reply.code(202).send({ executando: true, jaEstavaExecutando: jaExecutando });
   });
 
-  await app.register(fastifyStatic, {
-    root: fileURLToPath(new URL("../public", import.meta.url)),
-  });
+  const pastaPublica = fileURLToPath(new URL("../public", import.meta.url));
+
+  // A página inicial sai por aqui (não pelo servidor de arquivos) para pedir cada arquivo da tela com um código de
+  // versão: ver pagina.ts. `no-cache` obriga o navegador a revalidar o HTML, então ele nunca fica preso a uma versão velha.
+  const enviarPagina = async (_request: unknown, reply: import("fastify").FastifyReply) =>
+    reply.header("Cache-Control", "no-cache").type("text/html; charset=utf-8").send(paginaInicial(pastaPublica));
+  app.get("/", enviarPagina);
+  app.get("/index.html", enviarPagina);
+
+  await app.register(fastifyStatic, { root: pastaPublica, index: false });
 
   return app;
 }

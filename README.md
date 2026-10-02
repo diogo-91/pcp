@@ -67,6 +67,8 @@ Em produção o servidor **não sobe sem `ACCESS_TOKEN`** (a tela mostra nomes e
 
 > O nome exato dos menus pode variar um pouco conforme a versão do EasyPanel.
 
+**Depois de um deploy não precisa limpar o cache do navegador:** a página inicial (`/`) é montada pelo servidor e pede `style.css`, `app.css` e `app.js` com um código que muda quando o conteúdo muda (`/app.js?v=3f9a1c07b2`), e é servida com `Cache-Control: no-cache`. Assim o navegador nunca mistura um HTML novo com um `app.js` antigo (ver `src/pagina.ts`).
+
 ### Levar os dados que já foram preenchidos (uma vez)
 
 O banco de produção nasce vazio. Para levar o que já foi digitado no banco local (status, prazos, atendimento...) e o histórico de pedidos antigos, gere um backup em JSON na máquina onde está o banco:
