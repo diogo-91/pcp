@@ -135,7 +135,8 @@ export class PlanejamentoService {
 
   constructor(private readonly repo: PcpRepository, opcoes: PlanejamentoOptions) {
     this.endpoint = montarEndpoint(opcoes.url);
-    this.timeoutMs = opcoes.timeoutMs ?? 20_000;
+    // A resposta real leva ~13 s (724 ordens, com a lista de materiais de cada uma): 60 s dá folga em horário de pico.
+    this.timeoutMs = opcoes.timeoutMs ?? 60_000;
     this.fetchImpl = opcoes.fetchImpl ?? fetch;
     this.agora = opcoes.agora ?? (() => new Date());
     this.log = opcoes.log ?? semLog;
