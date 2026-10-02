@@ -194,8 +194,8 @@ function linhaHtml(p) {
     <td>${somenteLeitura(p.clienteNome, 'Sem nome')}</td>
     <td>${somenteLeitura(p.telefone, 'Sem telefone')}</td>
     <td>${selectHtml(p, 'statusPcp', estado.opcoes.statusPcp, COR_STATUS, 'Status')}</td>
-    <td>${dataHtml(p, 'prazoEntrega', 'Prazo de entrega')}</td>
     <td data-celula="producao">${producaoHtml(p)}</td>
+    <td>${dataHtml(p, 'prazoEntrega', 'Prazo de entrega')}</td>
     <td data-celula="alerta">${tagHtml(p)}</td>
     <td>${selectHtml(p, 'atendimento', estado.opcoes.atendimento, COR_ATENDIMENTO, 'Atendimento')}</td>
     <td>${inputHtml(p, 'responsavel', 'text', 'Responsável')}</td>
