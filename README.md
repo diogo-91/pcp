@@ -31,7 +31,7 @@ O sincronizador pede à Nomus só os pedidos com item nesse status (`/pedidos?qu
 - Cada página é gravada assim que chega: a tabela enche aos poucos e uma falha no meio não perde o que já entrou.
 - Nome e telefone vêm do cadastro do cliente (`/pessoas`), consultado só para pedidos novos (e guardado em cache por 7 dias).
 - Se o cliente de um pedido novo não puder ser consultado (limite da Nomus), o pedido **não entra em branco**: fica de fora e entra na próxima rodada.
-- Prazo inicial = data de entrega mais próxima entre os itens liberados.
+- Prazo inicial = data de entrega mais próxima entre os itens liberados **+ `ENTREGA_DIAS_EXTRA` dias (padrão: 20)**, uma margem de produção. Só vale na **entrada** do pedido: quem já está no banco nunca muda, e sincronizar de novo não soma outra vez. Pedido sem data de entrega na Nomus continua sem prazo. `ENTREGA_DIAS_EXTRA=0` usa o prazo da Nomus como veio.
 - O pedido só sai da tabela quando o PCP o marca como **ENCERRADO** ou **CANCELADO** (continua no banco). Consequência da regra acima: um pedido que já saiu de "Liberado" na Nomus (faturado, cancelado lá) continua na tabela até alguém encerrá-lo aqui.
 - Campos de data só gravam depois que a pessoa para de digitar; limpar uma data é pelo botão "×".
 

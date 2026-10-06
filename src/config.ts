@@ -24,6 +24,8 @@ export interface AppConfig {
   /** Endereço do sistema de apontamento, de onde vem a programação da produção ("Prazo de produção"). Vazio = desligado. */
   planejamentoUrl: string;
   planejamentoIntervalMs: number;
+  /** Dias somados ao prazo de entrega da Nomus quando um pedido novo entra na tabela. Padrão: 20. */
+  entregaDiasExtra: number;
 }
 
 function hopsDoProxy(env: NodeJS.ProcessEnv): number {
@@ -32,6 +34,14 @@ function hopsDoProxy(env: NodeJS.ProcessEnv): number {
   if (valor === undefined || valor === "") return padrao;
   const n = Number(valor);
   return Number.isInteger(n) && n >= 0 && n <= 5 ? n : padrao;
+}
+
+/** ENTREGA_DIAS_EXTRA: inteiro de 0 a 365. Vazio ou inválido volta ao padrão (20); 0 desliga a margem. */
+function diasExtraEntrega(env: NodeJS.ProcessEnv): number {
+  const valor = env.ENTREGA_DIAS_EXTRA;
+  if (valor === undefined || valor.trim() === "") return 20;
+  const n = Number(valor);
+  return Number.isInteger(n) && n >= 0 && n <= 365 ? n : 20;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -53,6 +63,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     planejamentoUrl: (env.PLANEJAMENTO_URL ?? "").trim(),
     // O calendário muda ao longo do dia (arrastar ordens); a leitura é leve e o botão "Sincronizar" força uma.
     planejamentoIntervalMs: Number(env.PLANEJAMENTO_INTERVAL_MS ?? 10 * 60 * 1000),
+    entregaDiasExtra: diasExtraEntrega(env),
   };
 }
 

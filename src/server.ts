@@ -30,7 +30,11 @@ const nomus = new NomusClient({
   timeoutMs: config.nomusTimeoutMs,
 });
 
-const sync = new SyncService(nomus, repo, { statusLiberado: config.nomusStatusLiberado, log });
+const sync = new SyncService(nomus, repo, {
+  statusLiberado: config.nomusStatusLiberado,
+  diasExtraEntrega: config.entregaDiasExtra,
+  log,
+});
 
 if (config.planejamentoUrl && montarEndpoint(config.planejamentoUrl) === null) {
   console.error(`[planejamento] PLANEJAMENTO_URL inválida ("${config.planejamentoUrl}"): use um endereço http(s). A coluna "Prazo de produção" ficará vazia.`);

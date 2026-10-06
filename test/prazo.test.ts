@@ -55,3 +55,17 @@ test("isDataIsoValida", () => {
   assert.equal(isDataIsoValida("28/09/2026"), false);
   assert.equal(isDataIsoValida("2026-9-8"), false);
 });
+
+test("somarDias: soma dias corridos de calendário e recusa data inválida", async () => {
+  const { somarDias } = await import("../src/prazo");
+  assert.equal(somarDias("2026-10-10", 20), "2026-10-30");
+  assert.equal(somarDias("2026-10-25", 20), "2026-11-14", "vira o mês");
+  assert.equal(somarDias("2026-12-20", 20), "2027-01-09", "vira o ano");
+  assert.equal(somarDias("2028-02-20", 20), "2028-03-11", "ano bissexto");
+  assert.equal(somarDias("2027-02-20", 20), "2027-03-12", "ano comum");
+  assert.equal(somarDias("2026-10-10", 0), "2026-10-10");
+  assert.equal(somarDias("2026-10-10", -10), "2026-09-30");
+  assert.equal(somarDias("2026-02-30", 5), null);
+  assert.equal(somarDias("10/10/2026", 5), null);
+  assert.equal(somarDias("", 5), null);
+});

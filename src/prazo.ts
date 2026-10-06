@@ -69,3 +69,12 @@ export function isDataIsoValida(valor: string): boolean {
   const data = new Date(Date.UTC(ano, mes - 1, dia));
   return data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
 }
+
+/** Soma `dias` corridos a uma data AAAA-MM-DD (calendário puro, em UTC: sem horário nem fuso). Data inválida → null. */
+export function somarDias(iso: string, dias: number): string | null {
+  if (!isDataIsoValida(iso)) return null;
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const nova = new Date(Date.UTC(ano, mes - 1, dia + dias));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${nova.getUTCFullYear()}-${p(nova.getUTCMonth() + 1)}-${p(nova.getUTCDate())}`;
+}

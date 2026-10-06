@@ -18,6 +18,7 @@ const nomus = new NomusClient({
 
 const sync = new SyncService(nomus, repo, {
   statusLiberado: config.nomusStatusLiberado,
+  diasExtraEntrega: config.entregaDiasExtra,
   log: { info: (m) => console.log(m), warn: (m) => console.warn(m) },
 });
 

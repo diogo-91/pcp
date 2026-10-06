@@ -1,4 +1,4 @@
-import { brParaIso } from "./prazo";
+import { brParaIso, somarDias } from "./prazo";
 import type { PessoaCache, PcpRepository } from "./repository";
 import type { PedidoNomus, SyncRun, SyncStatus } from "./types";
 
@@ -39,6 +39,11 @@ export interface SyncOptions {
   /** Pausa entre páginas, para aliviar o rate limit da Nomus. */
   pausaEntrePaginasMs?: number;
   tamanhoPagina?: number;
+  /**
+   * Dias somados ao prazo de entrega da Nomus quando um pedido NOVO entra na tabela (margem de produção). Só vale na
+   * entrada: pedido que já está no banco nunca é alterado. Pedido sem data na Nomus continua sem prazo. Padrão: 0.
+   */
+  diasExtraEntrega?: number;
   agora?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   log?: Logger;
@@ -217,7 +222,9 @@ export class SyncService {
       .filter((d): d is string => d !== null)
       .sort();
 
-    return datas[0] ?? null;
+    const base = datas[0] ?? null;
+    const extra = this.opcoes.diasExtraEntrega ?? 0;
+    return base !== null && extra !== 0 ? somarDias(base, extra) : base;
   }
 
   private async carregarPessoas(ids: number[]): Promise<Map<number, PessoaCache>> {

@@ -52,3 +52,13 @@ test("TRUST_PROXY_HOPS: padrão 1 em produção e 0 fora dela; valores inválido
   assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "99" }), 1);
   assert.equal(de({ NODE_ENV: "production", TRUST_PROXY_HOPS: "1.5" }), 1);
 });
+
+test("ENTREGA_DIAS_EXTRA: padrão 20; 0 desliga; valor inválido volta ao padrão", () => {
+  const de = (v?: string) => loadConfig((v === undefined ? {} : { ENTREGA_DIAS_EXTRA: v }) as NodeJS.ProcessEnv).entregaDiasExtra;
+  assert.equal(de(), 20);
+  assert.equal(de(""), 20);
+  assert.equal(de("0"), 0);
+  assert.equal(de("30"), 30);
+  assert.equal(de("365"), 365);
+  for (const ruim of ["abc", "-5", "1.5", "366", "99999"]) assert.equal(de(ruim), 20, ruim);
+});

@@ -322,3 +322,63 @@ test("pedido que aparece repetido entre duas páginas (join por item) conta uma 
   assert.equal(run.novos, 51);
   assert.equal(repo.listar().length, 51);
 });
+
+// ---------------------------------------------------------------- margem de dias no prazo de entrega de pedido NOVO
+
+const prepararComMargem = (responder: (c: string) => Resposta, diasExtraEntrega?: number) => {
+  const repo = new PcpRepository(openDatabase(":memory:"));
+  const nomus = new NomusFalso(responder);
+  const sync = new SyncService(nomus, repo, { statusLiberado: 2, diasExtraEntrega, ...semEspera });
+  return { repo, nomus, sync };
+};
+
+test("pedido NOVO entra com o prazo da Nomus + 20 dias; vira o mês e o ano certo", async () => {
+  const { repo, sync } = prepararComMargem(
+    respostaPadrao([
+      ped(2001, 501, [item(2, "10/10/2026 00:00:00")]),
+      ped(2002, 502, [item(2, "20/12/2026 00:00:00")]), // 20/12 + 20 = 09/01 do ano seguinte
+      ped(2003, 501, [item(2, "20/02/2028 00:00:00")]), // 2028 é bissexto: 20/02 + 20 = 11/03
+    ]),
+    20
+  );
+  await sync.executar("teste");
+
+  assert.equal(repo.buscar(2001)!.prazoEntrega, "2026-10-30");
+  assert.equal(repo.buscar(2002)!.prazoEntrega, "2027-01-09");
+  assert.equal(repo.buscar(2003)!.prazoEntrega, "2028-03-11");
+});
+
+test("a margem soma ao prazo MAIS PRÓXIMO entre os itens liberados (uma vez só, não por item)", async () => {
+  const { repo, sync } = prepararComMargem(
+    respostaPadrao([ped(2001, 501, [item(2, "20/10/2026 00:00:00"), item(2, "12/10/2026 00:00:00"), item(1, "01/10/2026 00:00:00")])]),
+    20
+  );
+  await sync.executar("teste");
+  assert.equal(repo.buscar(2001)!.prazoEntrega, "2026-11-01", "12/10 (o item não liberado é ignorado) + 20");
+});
+
+test("pedido sem data de entrega na Nomus continua SEM prazo (não inventa data)", async () => {
+  const { repo, sync } = prepararComMargem(respostaPadrao([ped(2001, 501, [{ status: 2 } as never])]), 20);
+  await sync.executar("teste");
+  assert.equal(repo.buscar(2001)!.prazoEntrega, null);
+});
+
+test("a margem só vale na ENTRADA: pedido que já está no banco nunca é alterado, nem ganha +20 de novo", async () => {
+  const lista = [ped(2001, 501, [item(2, "10/10/2026 00:00:00")])];
+  const { repo, sync } = prepararComMargem((c) => respostaPadrao(lista)(c), 20);
+  await sync.executar("teste");
+  assert.equal(repo.buscar(2001)!.prazoEntrega, "2026-10-30");
+
+  repo.atualizarTratativa(2001, { prazoEntrega: "2026-11-15" }, "2026-10-06T10:00:00.000Z"); // o PCP ajustou
+  await sync.executar("teste");
+  await sync.executar("teste");
+  assert.equal(repo.buscar(2001)!.prazoEntrega, "2026-11-15", "a edição do PCP fica; sincronizar de novo não soma mais 20");
+});
+
+test("sem a opção (ou com 0) o prazo entra exatamente como veio da Nomus", async () => {
+  for (const extra of [undefined, 0]) {
+    const { repo, sync } = prepararComMargem(respostaPadrao([ped(2001, 501, [item(2, "10/10/2026 00:00:00")])]), extra);
+    await sync.executar("teste");
+    assert.equal(repo.buscar(2001)!.prazoEntrega, "2026-10-10", String(extra));
+  }
+});
