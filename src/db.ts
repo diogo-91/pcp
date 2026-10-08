@@ -226,6 +226,55 @@ const MIGRATIONS: string[] = [
     detalhe_erros TEXT
   );
   `,
+  // Agenda de produção (feriados), compras de terceiros, pagamentos a fornecedores e estoque de parafusos.
+  `
+  CREATE TABLE IF NOT EXISTS pcp_feriado (
+    data TEXT PRIMARY KEY,
+    nome TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS pcp_fornecedor (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome    TEXT NOT NULL UNIQUE,
+    fornece TEXT NOT NULL DEFAULT '',
+    contato TEXT NOT NULL DEFAULT '',
+    ativo   INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS pcp_compra (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo               TEXT NOT NULL,
+    pedido_id          INTEGER REFERENCES pcp_pedido(id),
+    fornecedor_id      INTEGER REFERENCES pcp_fornecedor(id),
+    medidas            TEXT NOT NULL DEFAULT '[]',
+    total_metros       REAL NOT NULL DEFAULT 0,
+    comprimento_peca_m REAL,
+    material           TEXT NOT NULL DEFAULT '',
+    tr                 TEXT,
+    cotacao            TEXT NOT NULL DEFAULT '',
+    valor_centavos     INTEGER,
+    status             TEXT NOT NULL DEFAULT 'A_COTAR',
+    comprado_por       TEXT NOT NULL DEFAULT '',
+    comprado_em        TEXT,
+    observacao         TEXT NOT NULL DEFAULT '',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL,
+    updated_by         TEXT NOT NULL DEFAULT 'PCP'
+  );
+  CREATE INDEX IF NOT EXISTS idx_pcp_compra_pedido ON pcp_compra (pedido_id);
+  CREATE TABLE IF NOT EXISTS pcp_pagamento (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    fornecedor_id  INTEGER NOT NULL REFERENCES pcp_fornecedor(id),
+    data           TEXT NOT NULL,
+    valor_centavos INTEGER NOT NULL,
+    observacao     TEXT NOT NULL DEFAULT '',
+    created_at     TEXT NOT NULL,
+    created_by     TEXT NOT NULL DEFAULT 'PCP'
+  );
+  CREATE TABLE IF NOT EXISTS pcp_estoque (
+    material    TEXT PRIMARY KEY REFERENCES pcp_material(codigo),
+    quantidade  REAL NOT NULL,
+    contado_em  TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

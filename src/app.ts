@@ -26,6 +26,8 @@ export interface AppDeps {
   sincronizarPedidoProgramacao?: (nomusPedidoId: number) => Promise<unknown>;
   /** Importação do histórico da planilha (upload do .xlsx na tela de configurações). */
   importarPlanilhaProgramacao?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown;
+  /** Agenda, painel, compras de terceiros, parafusos e calculadora (módulo Programação). */
+  extrasProgramacao?: import("./programacao/extras").ExtrasService;
   /** Vazio = sem autenticação (uso local). */
   accessToken: string;
   /** Segundo código, de perfil "consulta": só lê a Programação, sem telefone de clientes e sem editar. Vazio = não existe. */
@@ -85,7 +87,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   }
 
-  if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao);
+  if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao, deps.extrasProgramacao);
   else app.decorateRequest("perfil", "completo");
 
   app.get("/api/health", async () => ({ ok: true }));

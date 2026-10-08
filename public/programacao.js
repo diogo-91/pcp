@@ -923,6 +923,9 @@ document.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- ponte com o app.js
 
 window.PCP.programacao = {
+  abrirPedido: (id) => abrirDetalhe(id),
+  get perfil() { return S.dados?.perfil; },
+  garantirUsuario,
   ativar() {
     if (!S.montado) S.montado = true;
     carregar();

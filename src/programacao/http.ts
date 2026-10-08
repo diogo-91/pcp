@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { calcularBobina, type EdicaoCompra, type ExtrasService } from "./extras";
 import { ErroDeValidacao, filtrosDaQuery, type EdicaoItem, type EdicaoPedido, type Perfil, type ProgramacaoService } from "./service";
 
 declare module "fastify" {
@@ -36,7 +37,9 @@ export function registrarProgramacao(
   /** Busca um pedido na Nomus e atualiza a Programação dele (opcional: sem Nomus configurada o botão responde 503). */
   sincronizarPedido?: (nomusPedidoId: number) => Promise<unknown>,
   /** Importação do histórico da planilha (.xlsx enviado pela tela). Opcional. */
-  importarPlanilha?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown
+  importarPlanilha?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown,
+  /** Agenda, painel, compras de terceiros, parafusos, feriados e calculadora. */
+  extras?: ExtrasService
 ): void {
   app.decorateRequest("perfil", "completo");
 
@@ -139,6 +142,116 @@ export function registrarProgramacao(
         } catch (erro) {
           throw new ErroDeValidacao(erro instanceof Error ? erro.message : "Não foi possível ler a planilha.");
         }
+      });
+    });
+  }
+
+  if (extras) registrarExtras();
+
+  function registrarExtras() {
+    const ex = extras as ExtrasService;
+    const nomeUsuario = (request: FastifyRequest) => (usuarioDe(request) ?? "PCP").replace(/[\r\n\t]/g, " ").trim().slice(0, 60) || "PCP";
+
+    app.get("/api/programacao/agenda", async (request, reply) =>
+      tratar(reply, () => {
+        const q = queryTexto(request.query);
+        reply.header("Cache-Control", "no-store");
+        return ex.agenda(q.de, q.ate, request.perfil);
+      })
+    );
+    app.get("/api/programacao/painel", async (request, reply) =>
+      tratar(reply, () => {
+        const q = queryTexto(request.query);
+        reply.header("Cache-Control", "no-store");
+        return ex.painel(q.de, q.ate, request.perfil);
+      })
+    );
+    app.get("/api/programacao/parafusos", async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      return ex.parafusos(request.perfil);
+    });
+    app.put("/api/programacao/parafusos/:codigo/estoque", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        const c = escolher(request.body, ["quantidade", "contadoEm"] as const);
+        ex.definirEstoque((request.params as { codigo: string }).codigo, c.quantidade as number, (c.contadoEm as string | undefined) ?? undefined);
+        return ex.parafusos(request.perfil);
+      });
+    });
+
+    app.get("/api/programacao/calculadora", async (request, reply) =>
+      tratar(reply, () => {
+        const q = queryTexto(request.query);
+        const n = (v?: string) => (v === undefined || v === "" ? undefined : Number(String(v).replace(",", ".")));
+        return calcularBobina({ espessuraMm: n(q.espessura) as number, larguraM: n(q.largura) as number, densidade: n(q.densidade), pesoKg: n(q.peso), comprimentoM: n(q.comprimento) });
+      })
+    );
+
+    app.get("/api/programacao/feriados", async () => ex.feriados());
+    app.put("/api/programacao/feriados", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        const c = escolher(request.body, ["data", "nome"] as const);
+        ex.adicionarFeriado(String(c.data), String(c.nome));
+        return ex.feriados();
+      });
+    });
+    app.delete("/api/programacao/feriados/:data", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      ex.removerFeriado((request.params as { data: string }).data);
+      return ex.feriados();
+    });
+
+    app.get("/api/programacao/compras", async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      const q = queryTexto(request.query);
+      return ex.compras({ tipo: q.tipo, status: q.status, fornecedor: q.fornecedor, q: q.q }, request.perfil);
+    });
+    const CAMPOS_COMPRA = ["tipo", "numeroPedido", "pedidoId", "fornecedorId", "medidas", "totalMetros", "comprimentoPecaM", "material", "tr", "cotacao", "valor", "status", "compradoPor", "compradoEm", "observacao"] as const;
+    app.post("/api/programacao/compras", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => ({ id: ex.criarCompra(escolher(request.body, CAMPOS_COMPRA) as EdicaoCompra, nomeUsuario(request)) }));
+    });
+    app.patch("/api/programacao/compras/:id", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        ex.editarCompra(idDe((request.params as { id: string }).id), escolher(request.body, CAMPOS_COMPRA) as EdicaoCompra, nomeUsuario(request));
+        return { ok: true };
+      });
+    });
+
+    app.get("/api/programacao/fornecedores", async () => ex.fornecedores());
+    app.post("/api/programacao/fornecedores", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        ex.salvarFornecedor(escolher(request.body, ["nome", "fornece", "contato"] as const));
+        return ex.fornecedores();
+      });
+    });
+    app.patch("/api/programacao/fornecedores/:id", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        ex.salvarFornecedor({ ...escolher(request.body, ["nome", "fornece", "contato", "ativo"] as const), id: idDe((request.params as { id: string }).id) });
+        return ex.fornecedores();
+      });
+    });
+    app.get("/api/programacao/fornecedores/:id/pagamentos", async (request, reply) =>
+      tratar(reply, () => ex.pagamentos(idDe((request.params as { id: string }).id)))
+    );
+    app.post("/api/programacao/fornecedores/:id/pagamentos", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        const c = escolher(request.body, ["data", "valor", "observacao"] as const);
+        const fornecedorId = idDe((request.params as { id: string }).id);
+        ex.registrarPagamento({ fornecedorId, data: c.data as string | undefined, valor: c.valor as number, observacao: c.observacao as string | undefined }, nomeUsuario(request));
+        return ex.pagamentos(fornecedorId);
+      });
+    });
+    app.delete("/api/programacao/pagamentos/:id", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return tratar(reply, () => {
+        ex.removerPagamento(idDe((request.params as { id: string }).id));
+        return { ok: true };
       });
     });
   }

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Arquivos que o index.html carrega e que mudam a cada versão da tela. */
-const ARQUIVOS_DA_TELA = ["style.css", "app.css", "app.js", "programacao.css", "programacao.js"];
+const ARQUIVOS_DA_TELA = ["style.css", "app.css", "app.js", "programacao.css", "programacao.js", "programacao-extras.js"];
 
 /**
  * Devolve o index.html com cada arquivo da tela pedido por um endereço que muda quando o CONTEÚDO muda

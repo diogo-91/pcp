@@ -20,7 +20,7 @@ function pastaComTela(conteudos: { css?: string; appCss?: string; js?: string } 
   return dir;
 }
 
-const versoes = (html: string) => Object.fromEntries([...html.matchAll(/"\/([\w.]+)\?v=([0-9a-f]{10})"/g)].map((m) => [m[1], m[2]]));
+const versoes = (html: string) => Object.fromEntries([...html.matchAll(/"\/([\w.-]+)\?v=([0-9a-f]{10})"/g)].map((m) => [m[1], m[2]]));
 
 test("cada arquivo da tela é pedido com um código de versão de 10 caracteres", () => {
   const dir = pastaComTela();
@@ -61,7 +61,7 @@ test("GET / e /index.html servem a tela versionada, sem cache e SEM exigir o có
     assert.equal(r.statusCode, 200, url);
     assert.match(String(r.headers["content-type"]), /text\/html/);
     assert.equal(r.headers["cache-control"], "no-cache");
-    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "programacao.css", "programacao.js", "style.css"], url);
+    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "programacao-extras.js", "programacao.css", "programacao.js", "style.css"], url);
   }
 });
 

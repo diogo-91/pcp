@@ -282,7 +282,7 @@ test("um banco já existente (sem as colunas de produção) é migrado ao abrir,
     antigo.exec("ALTER TABLE pedidos DROP COLUMN prazo_producao; ALTER TABLE pedidos DROP COLUMN producao_itens;");
     // ...e sem o módulo Programação (migração seguinte), que também já rodou ao abrir o banco novo.
     antigo.exec(
-      "DROP TABLE pcp_sync_programacao; DROP TABLE pcp_evento; DROP TABLE pcp_item_consumo; DROP TABLE pcp_item_op; DROP TABLE pcp_pedido_item; " +
+      "DROP TABLE pcp_estoque; DROP TABLE pcp_pagamento; DROP TABLE pcp_compra; DROP TABLE pcp_fornecedor; DROP TABLE pcp_feriado; DROP TABLE pcp_sync_programacao; DROP TABLE pcp_evento; DROP TABLE pcp_item_consumo; DROP TABLE pcp_item_op; DROP TABLE pcp_pedido_item; " +
         "DROP TABLE pcp_pedido; DROP TABLE pcp_produto_nomus; DROP TABLE pcp_parametro; DROP TABLE pcp_material; DROP TABLE pcp_cor; " +
         "DROP TABLE pcp_cidade_rota; DROP TABLE pcp_rota; ALTER TABLE pessoas DROP COLUMN municipio; ALTER TABLE pessoas DROP COLUMN uf; PRAGMA user_version = 2;"
     );

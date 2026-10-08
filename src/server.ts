@@ -4,6 +4,7 @@ import { loadConfigFromEnvFile, problemasDeConfiguracao } from "./config";
 import { openDatabase } from "./db";
 import { NomusClient } from "./nomus";
 import { PlanejamentoService, montarEndpoint } from "./planejamento";
+import { ExtrasService } from "./programacao/extras";
 import { importarDeArquivo } from "./programacao/importacao";
 import { ProgramacaoRepository } from "./programacao/repo";
 import { ProgramacaoService } from "./programacao/service";
@@ -43,6 +44,8 @@ const progSync = new ProgramacaoSync(nomus, progRepo, {
   log: progLog,
 });
 
+const progServico = new ProgramacaoService(progRepo);
+
 const sync = new SyncService(nomus, repo, {
   statusLiberado: config.nomusStatusLiberado,
   diasExtraEntrega: config.entregaDiasExtra,
@@ -61,7 +64,8 @@ const app = await buildApp({
   repo,
   sync,
   planejamento,
-  programacao: new ProgramacaoService(progRepo),
+  programacao: progServico,
+  extrasProgramacao: new ExtrasService(db, progServico, progRepo),
   sincronizarPedidoProgramacao: (id) => progSync.sincronizarPedido(id),
   importarPlanilhaProgramacao: (arquivo, o) =>
     importarDeArquivo(arquivo, { db, repo: progRepo, gravar: o.gravar, forcar: o.forcar, pastaBackup: join(dirname(config.databaseFile), "backups-operacoes") }),

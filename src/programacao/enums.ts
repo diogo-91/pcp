@@ -23,7 +23,7 @@ export type Situacao = (typeof SITUACOES)[number];
 
 export const SITUACAO_ROTULO: Record<Situacao, string> = {
   AGUARDANDO_LIBERACAO: "Aguardando liberação",
-  PROGRAMAR: "Programar",
+  PROGRAMAR: "A programar",
   PROGRAMADO: "Programado",
   PROCESSO: "Processo",
   COLA: "Cola",
@@ -224,6 +224,31 @@ export const CIDADES_INICIAIS: Array<[string, number]> = [
   ["Ribeirão Preto-SP", 21], ["Franca-SP", 22],
 ];
 
+export const FORNECEDORES_INICIAIS = ["Anfer", "Açoluma", "Fenix", "Drafer", "Sorotelha", "Torre Steel", "IBI Metal"];
+
+export const COMPRA_TIPOS = ["FORRO_ANFER", "TRAPEZIO_ANFER", "FORRO_PVC", "TRANSLUCIDA", "TELHA_PIR"] as const;
+export type CompraTipo = (typeof COMPRA_TIPOS)[number];
+export const COMPRA_TIPO_ROTULO: Record<CompraTipo, string> = {
+  FORRO_ANFER: "Forro Anfer",
+  TRAPEZIO_ANFER: "Trapézio Anfer",
+  FORRO_PVC: "Forro PVC",
+  TRANSLUCIDA: "Telha translúcida/leitosa",
+  TELHA_PIR: "Telha com PIR",
+};
+
+export const COMPRA_STATUS = ["A_COTAR", "COTADO", "COMPRADO", "RECEBIDO", "RETIRADO", "CANCELADO"] as const;
+export type CompraStatus = (typeof COMPRA_STATUS)[number];
+export const COMPRA_STATUS_ROTULO: Record<CompraStatus, string> = {
+  A_COTAR: "A cotar",
+  COTADO: "Cotado",
+  COMPRADO: "Comprado",
+  RECEBIDO: "Recebido",
+  RETIRADO: "Retirado",
+  CANCELADO: "Cancelado",
+};
+/** Compras que já viraram dívida com o fornecedor. */
+export const COMPRA_STATUS_FIRMES: readonly CompraStatus[] = ["COMPRADO", "RECEBIDO", "RETIRADO"];
+
 export type UnidadeMaterial = "kg" | "m" | "un";
 
 /** Catálogo de materiais: bobina/EPS/cola/tinta são calculados; o resto é lançado à mão (ou vem da Nomus, se um dia vier). */
@@ -263,6 +288,7 @@ export const PARAMETROS_INICIAIS: Array<{ chave: string; valor: number; descrica
   { chave: "fator_chapa_sanduiche", valor: 2, descricao: "Metros de chapa por metro de telha sanduíche (duas chapas). Pergunta aberta 11.1." },
   { chave: "cola_kg_por_metro_eps", valor: 0.2, descricao: "Kg de cola por metro de EPS (200 g/m)." },
   { chave: "tinta_kg_por_metro_face", valor: 0.2, descricao: "Kg de tinta por metro pintado, por face (1 kg pinta 5 m)." },
+  { chave: "preco_forro_anfer_m", valor: 50, descricao: "Preço do forro Anfer em R$ por metro (valor da compra = metros × preço)." },
   { chave: "capacidade_m_dia", valor: 2000, descricao: "Capacidade da fábrica em metros por dia útil (pergunta aberta 11.2)." },
   { chave: "dias_vence_em_breve", valor: 3, descricao: "Quantos dias antes do prazo o item aparece como 'vence em breve'." },
 ];

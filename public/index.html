@@ -178,6 +178,16 @@
           <div class="viewhead-pill" id="pg-perfil">Nomus + PCP</div>
         </div>
 
+        <nav class="pg-abas" id="pg-abas" aria-label="Seções da programação">
+          <button type="button" data-aba="pedidos" aria-selected="true">Pedidos</button>
+          <button type="button" data-aba="agenda" aria-selected="false">Agenda</button>
+          <button type="button" data-aba="painel" aria-selected="false">Painel</button>
+          <button type="button" data-aba="compras" aria-selected="false">Compras de terceiros</button>
+          <button type="button" data-aba="parafusos" aria-selected="false">Parafusos</button>
+          <button type="button" data-aba="calculadora" aria-selected="false">Calculadora de bobina</button>
+        </nav>
+
+        <div id="pg-sec-pedidos">
         <section class="pg-stats" id="pg-stats" aria-label="Indicadores da programação"></section>
 
         <article class="panel">
@@ -232,6 +242,14 @@
           </div>
           <div class="pager"><small id="pg-salvo">&nbsp;</small><small id="pg-sync"></small></div>
         </article>
+        </div>
+
+        <div id="pg-sec-agenda" class="pg-secao" hidden></div>
+        <div id="pg-sec-painel" class="pg-secao" hidden></div>
+        <div id="pg-sec-compras" class="pg-secao" hidden></div>
+        <div id="pg-sec-parafusos" class="pg-secao" hidden></div>
+        <div id="pg-sec-calculadora" class="pg-secao" hidden></div>
+        <dialog id="pg-dlg-extra" class="pg-dialog"><form method="dialog" class="pg-dialog-topo"><h3 id="pg-dlg-titulo"></h3><button class="btn-sync">Fechar</button></form><div id="pg-dlg-corpo" style="padding:6px 20px 20px"></div></dialog>
 
         <aside class="pg-drawer" id="pg-drawer" hidden aria-label="Detalhe do pedido"></aside>
 
@@ -254,5 +272,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="/app.js"></script>
 <script type="module" src="/programacao.js"></script>
+<script type="module" src="/programacao-extras.js"></script>
 </body>
 </html>

@@ -124,6 +124,14 @@ Substitui a aba **Base** da planilha "Programação de Produção 2026". Um item
 
 **O que muda numa nova sincronização.** Item já programado cujo texto mudou na Nomus ganha o alerta "alterado no ERP após programação"; item que some do pedido é marcado "removido no ERP" (não é apagado); rodar a sincronização duas vezes não altera nada.
 
+### Outras abas da Programação
+
+- **Agenda** (substitui a "CRP – Carga Máquina"): um dia útil por coluna, com os itens programados, metros, metros pintados, EPS, valor, barra de ocupação contra a capacidade (verde até 80%, amarela até 100%, vermelha acima) e carga livre. Arraste um item para outro dia (atualiza "Programado para"); a lista lateral traz os itens liberados sem data e os de programação vencida. Feriados (botão **Feriados**) e fins de semana não contam como dia de trabalho. Mede-se a ocupação em **metros de telha** (soma das medidas).
+- **Painel**: (1) em aberto por situação, (2) em aberto por rota (com os pedidos de cada uma) e (3) produção x vendas por mês, com média por dia útil e % entregue no prazo. Produzido = pela data produzida; vendido = pela data do pedido na Nomus.
+- **Compras de terceiros** (substitui ANFER, PVC e Translúcida/PIR): lista única por tipo (forro Anfer, trapézio Anfer, forro PVC, translúcida, PIR), vinculada ao pedido pelo número. Valor do forro Anfer = metros × `preco_forro_anfer_m` (R$ 50), ou valor digitado. Forro PVC mostra peças = metros ÷ (comprimento da peça × 0,20). Por fornecedor: total comprado (só Comprado/Recebido/Retirado), pago (lançamentos com data) e saldo. Fornecedores iniciais: Anfer, Açoluma, Fenix, Drafer, Sorotelha, Torre Steel, IBI Metal.
+- **Parafusos**: 13 tipos; consumo médio dos 6 últimos meses fechados (pelos itens produzidos), demanda dos pedidos em aberto, estoque contado pela equipe e **comprar = demanda + 2 × média − estoque** (mínimo 0). As quantidades por pedido são lançadas na gaveta do pedido (a Nomus não traz parafuso como item nos pedidos lidos até agora).
+- **Calculadora de bobina**: peso ↔ comprimento (espessura, largura, densidade 7.850).
+
 ### Importar o histórico da planilha (uma vez)
 
 Datas de liberação/produção/entrega, situação, prazo negociado e observações só existem na planilha. Em *Programação → Configurações → Importar histórico da planilha*, escolha o `.xlsx` (abas **Base** e **Rotas**) e clique em **Simular**: nada é gravado e você baixa o relatório CSV (importadas, ajustadas, rejeitadas, com o motivo e a linha da planilha). Depois **Gravar importação** (o banco é copiado antes para `backups-operacoes/`). Datas em texto ("xxx", "22/01 e 23/01") ou de antes de 2025 são rejeitadas; itens editados no sistema depois da carga são preservados. Pelo terminal: `npm run importar-planilha -- "arquivo.xlsx" [--gravar] [--forcar]`.
