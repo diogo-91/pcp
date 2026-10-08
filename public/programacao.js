@@ -7,6 +7,11 @@ const CHAVE_VISOES = 'pcp_prog_visoes';
 const NOMES_TIPO = { PINTURA: 'Pintura', SEM_PINTURA: 'Sem pintura', PRE_PINTADA: 'Pré-pintada' };
 const CAMPOS_FILTRO = ['situacao', 'statusPrazo', 'rota', 'produto', 'tipo', 'cor'];
 
+function lerColunas() {
+  try { return JSON.parse(localStorage.getItem('pcp_prog_cols') || '{}'); } catch { return {}; }
+}
+const gravarColunas = () => { try { localStorage.setItem('pcp_prog_cols', JSON.stringify(S.cols)); } catch { /* sem storage */ } };
+
 const filtrosPadrao = () => ({
   visao: 'em_aberto', situacao: [], statusPrazo: [], rota: [], produto: [], tipo: [], cor: [],
   campoData: 'prazo', de: '', ate: '', soAlertas: false, q: '',
@@ -18,7 +23,7 @@ const S = {
   agrupar: true,
   colapsados: new Set(),
   sel: new Set(),
-  cols: { consumos: false, parafusos: false, componentes: false, terceiros: false },
+  cols: lerColunas(),
   detalhe: null, // { pedidoId, d }
   montado: false,
   carregando: false,
@@ -132,7 +137,7 @@ async function patchPedido(pedidoId, corpo) {
 // ---------------------------------------------------------------- colunas da grade
 
 const alertasHtml = (l) =>
-  l.alertas.length ? `<span class="pg-alerta" title="${esc(l.alertas.map((a) => a.texto).join('\n'))}">${l.alertas.length}</span>` : '';
+  l.alertas.length ? `<span class="pg-alerta" title="${esc(l.alertas.map((a) => a.texto).join('\n'))}" aria-label="${l.alertas.length} alerta(s)">⚠</span>` : '';
 
 function selectHtml(opcoes, atual, attrs, vazio) {
   const itens = opcoes.map((o) => `<option value="${esc(o.valor)}"${String(o.valor) === String(atual ?? '') ? ' selected' : ''}>${esc(o.rotulo)}</option>`);
@@ -157,26 +162,40 @@ function listaPorGrupo(l, grupo) {
     .join(' · ');
 }
 
+/** Colunas que sempre aparecem; as demais o usuário liga em "Colunas" (a escolha fica no navegador). */
+const ESSENCIAIS = ['pedido', 'cliente', 'prazo', 'situacao', 'produto', 'medidas', 'dProg', 'dProd'];
+const OPCIONAIS = [
+  ['Pedido', [['cidade', 'Cidade'], ['rota', 'Rota'], ['valor', 'Valor a receber'], ['obs', 'Observação']]],
+  ['Produção', [['metros', 'Metros de chapa'], ['ops', 'OPs'], ['dLib', 'Liberação da produção'], ['dEnt', 'Data de entrega']]],
+  ['Consumos', [['bobina', 'Bobina (kg)'], ['eps', 'EPS (m)'], ['cola', 'Cola (kg)'], ['tinta', 'Tinta (kg)'], ['parafusos', 'Parafusos'], ['componentes', 'Componentes']]],
+  ['Terceiros', [['terceiro', 'Fornecedor terceiro'], ['dTerc', 'Entrega do terceiro']]],
+];
+
 function colunas() {
   const o = S.dados.opcoes;
-  const base = [
+  const agr = S.agrupar;
+  const todas = [
     {
       id: 'pedido', t: 'Pedido', o: 'n',
-      fn: (l) => `<button type="button" class="pg-ped" data-abrir="${l.pedidoId}" title="Abrir o pedido">${l.numeroPedido}</button>${l.itemSeq ? `<span class="pg-sub">item ${esc(l.itemSeq)}</span>` : ''}${alertasHtml(l)}`,
+      fn: (l) =>
+        agr
+          ? `<span class="pg-sub">item ${esc(l.itemSeq || '—')}</span>${alertasHtml(l)}`
+          : `<button type="button" class="pg-ped" data-abrir="${l.pedidoId}" title="Abrir o pedido">${l.numeroPedido}</button>${l.itemSeq ? `<span class="pg-sub">item ${esc(l.itemSeq)}</span>` : ''}${alertasHtml(l)}`,
     },
-    { id: 'cliente', t: 'Cliente', o: 'n', cls: 'truncar', fn: (l) => `${esc(l.cliente)}${l.telefone ? `<span class="pg-sub">${esc(l.telefone)}</span>` : ''}` },
+    {
+      id: 'cliente', t: 'Cliente', o: 'n', cls: 'truncar',
+      fn: (l) => (agr ? '' : `${esc(l.cliente)}<span class="pg-sub">${esc(l.cidade || 'sem cidade')}${l.rota ? ` · Rota ${l.rota.id}` : ''}</span>`),
+    },
     { id: 'cidade', t: 'Cidade', o: 'n', fn: (l) => esc(l.cidade || '—') },
     {
       id: 'rota', t: 'Rota', o: 'p',
       fn: (l) => selectHtml(o.rotas.map((r) => ({ valor: r.id, rotulo: `${r.id} · ${r.nome}` })), l.rota?.id, `data-pedido="${l.pedidoId}" data-campo="rotaId"`, 'Sem rota'),
     },
     {
-      id: 'prazo', t: 'Prazo vigente', o: 'n',
-      fn: (l) => `${esc(fmtData(l.prazoVigente) || '—')}${l.prazoNegociado ? `<span class="pg-sub" title="Prazo original: ${esc(fmtData(l.prazoOriginal))}">negociado</span>` : ''}`,
-    },
-    {
-      id: 'statusPrazo', t: 'Status de prazo', o: 'c',
-      fn: (l) => `<span class="pg-tag ${esc(l.statusPrazo.codigo)}">${esc(l.statusPrazo.texto)}</span>`,
+      id: 'prazo', t: 'Prazo', o: 'n',
+      fn: (l) =>
+        `<div class="pg-prazo"><b>${esc(fmtData(l.prazoVigente) || 'Sem data')}</b>${l.prazoNegociado ? `<i title="Prazo original: ${esc(fmtData(l.prazoOriginal))}"> renegociado</i>` : ''}</div>
+         <span class="pg-tag ${esc(l.statusPrazo.codigo)}">${esc(l.statusPrazo.texto)}</span>`,
     },
     {
       id: 'situacao', t: 'Situação', o: 'p',
@@ -187,56 +206,46 @@ function colunas() {
     },
     {
       id: 'produto', t: 'Produto', o: 'n', cls: 'truncar',
-      fn: (l) => `${esc(l.categoriaRotulo)}<span class="pg-sub" title="${esc(l.produtoDescricao)}">${esc(l.produtoDescricao.slice(0, 44))}</span>`,
+      fn: (l) => {
+        const detalhe = [NOMES_TIPO[l.tipoPintura], l.trapezio, l.cor?.nome?.split(' ').slice(0, 2).join(' ')].filter(Boolean).join(' · ');
+        return `<span title="${esc(l.produtoDescricao)}">${esc(l.categoriaRotulo)}</span>${detalhe ? `<span class="pg-sub">${esc(detalhe)}</span>` : ''}`;
+      },
     },
-    { id: 'tipo', t: 'Tipo', o: 'n', fn: (l) => esc(NOMES_TIPO[l.tipoPintura] || '—') },
-    { id: 'cor', t: 'Cor', o: 'n', cls: 'truncar', fn: (l) => `<span title="${esc(l.cor?.nome || '')}">${esc(l.cor?.nome?.slice(0, 26) || '—')}</span>` },
-    { id: 'tr', t: 'TR', o: 'n', fn: (l) => esc(l.trapezio?.replace('TR', '') || '—') },
-    { id: 'faces', t: 'Faces', o: 'n', fn: (l) => String(l.facesPintura) },
     {
       id: 'medidas', t: 'Medidas', o: 'n', cls: 'truncar',
       fn: (l) =>
         l.medidasTexto
-          ? `<span title="${esc(l.infoAdicional)}">${esc(l.medidasTexto)}</span>${l.medidasOrigem === 'manual' ? '<span class="pg-sub">ajustado</span>' : ''}`
-          : `<span class="pg-sub" title="${esc(l.infoAdicional)}">${l.medidasOrigem === 'quantidade' ? 'só quantidade' : 'sem medidas'}</span>`,
+          ? `<span title="${esc(l.infoAdicional)}">${esc(l.medidasTexto)}</span><span class="pg-sub">${num(l.metrosTelha)} m${l.medidasOrigem === 'manual' ? ' · ajustado' : ''}</span>`
+          : `<span class="pg-aviso-mini" title="${esc(l.infoAdicional)}">${l.medidasOrigem === 'quantidade' ? `só quantidade (${num(l.metrosTelha)} m)` : 'sem medidas'}</span>`,
     },
-    { id: 'metros', t: 'Metros chapa', o: 'c', cls: 'n', fn: (l) => num(l.metrosChapa) },
+    { id: 'metros', t: 'Chapa (m)', o: 'c', cls: 'n', fn: (l) => num(l.metrosChapa) },
     {
-      id: 'ops', t: 'OP(s)', o: 'n', cls: 'truncar',
+      id: 'ops', t: 'OPs', o: 'n', cls: 'truncar',
       fn: (l) => (l.ops.length ? `<span title="${esc(l.ops.map((x) => `${x.numero} (${x.status})`).join('\n'))}">${esc(l.ops.map((x) => x.numero.replace(/^OS\s*/, '')).join(', '))}</span>` : '—'),
     },
-    { id: 'dProg', t: 'Data programação', o: 'p', fn: (l) => dataIn(l, 'dataProgramacao') },
-    { id: 'dLib', t: 'Data liberação', o: 'p', fn: (l) => dataIn(l, 'dataLiberacaoProducao') },
-    { id: 'dProd', t: 'Data produzida', o: 'p', fn: (l) => dataIn(l, 'dataProduzida') },
-    { id: 'dEnt', t: 'Data entrega', o: 'p', fn: (l) => dataIn(l, 'dataEntregaRealizada') },
+    { id: 'dProg', t: 'Programado para', o: 'p', fn: (l) => dataIn(l, 'dataProgramacao') },
+    { id: 'dLib', t: 'Liberado em', o: 'p', fn: (l) => dataIn(l, 'dataLiberacaoProducao') },
+    { id: 'dProd', t: 'Produzido em', o: 'p', fn: (l) => dataIn(l, 'dataProduzida') },
+    { id: 'dEnt', t: 'Entregue em', o: 'p', fn: (l) => dataIn(l, 'dataEntregaRealizada') },
+    { id: 'bobina', t: 'Bobina (kg)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'bobina') },
+    { id: 'eps', t: 'EPS (m)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'eps') },
+    { id: 'cola', t: 'Cola (kg)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'cola') },
+    { id: 'tinta', t: 'Tinta (kg)', o: 'c', cls: 'n', fn: (l) => (consumoQtd(l, 'tinta') ? `${consumoQtd(l, 'tinta')}${l.cor ? `<span class="pg-sub">${esc(l.cor.nome.slice(0, 22))}</span>` : ''}` : '') },
+    { id: 'parafusos', t: 'Parafusos (un)', o: 'p', cls: 'truncar', fn: (l) => listaPorGrupo(l, 'parafusos') || '—' },
+    { id: 'componentes', t: 'Componentes', o: 'p', cls: 'truncar', fn: (l) => listaPorGrupo(l, 'componentes') || '—' },
+    {
+      id: 'terceiro', t: 'Fornecedor terceiro', o: 'p',
+      fn: (l) => (pc() ? `<input class="pg-in" style="width:150px" value="${esc(l.fornecedorTerceiro)}" data-item="${l.id}" data-campo="fornecedorTerceiro" maxlength="100">` : esc(l.fornecedorTerceiro || '—')),
+    },
+    { id: 'dTerc', t: 'Entrega do terceiro', o: 'p', fn: (l) => dataIn(l, 'dataEntregaTerceiro') },
     { id: 'valor', t: 'Valor a receber', o: 'n', cls: 'n', fn: (l, primeiro) => (primeiro ? brl(l.valorPedido) : '<span class="pg-sub">↳ pedido</span>') },
     {
       id: 'obs', t: 'Observação', o: 'p', cls: 'truncar',
       fn: (l) => (l.observacao ? `<span title="${esc(l.observacao)}">${esc(l.observacao.slice(0, 60))}</span>` : '<span class="pg-sub">—</span>'),
     },
   ];
-
-  const extras = [];
-  if (S.cols.consumos) {
-    extras.push(
-      { id: 'bobina', t: 'Bobina (kg)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'bobina') },
-      { id: 'eps', t: 'EPS (m)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'eps') },
-      { id: 'cola', t: 'Cola (kg)', o: 'c', cls: 'n', fn: (l) => consumoQtd(l, 'cola') },
-      { id: 'tinta', t: 'Tinta (kg)', o: 'c', cls: 'n', fn: (l) => (consumoQtd(l, 'tinta') ? `${consumoQtd(l, 'tinta')}${l.cor ? `<span class="pg-sub">${esc(l.cor.nome.slice(0, 22))}</span>` : ''}` : '') }
-    );
-  }
-  if (S.cols.parafusos) extras.push({ id: 'parafusos', t: 'Parafusos (un)', o: 'p', cls: 'truncar', fn: (l) => listaPorGrupo(l, 'parafusos') || '—' });
-  if (S.cols.componentes) extras.push({ id: 'componentes', t: 'Componentes', o: 'p', cls: 'truncar', fn: (l) => listaPorGrupo(l, 'componentes') || '—' });
-  if (S.cols.terceiros) {
-    extras.push(
-      {
-        id: 'terceiro', t: 'Fornecedor terceiro', o: 'p',
-        fn: (l) => (pc() ? `<input class="pg-in" style="width:150px" value="${esc(l.fornecedorTerceiro)}" data-item="${l.id}" data-campo="fornecedorTerceiro" maxlength="100">` : esc(l.fornecedorTerceiro || '—')),
-      },
-      { id: 'dTerc', t: 'Entrega terceiro', o: 'p', fn: (l) => dataIn(l, 'dataEntregaTerceiro') }
-    );
-  }
-  return [...base.slice(0, 19), ...extras, ...base.slice(19)];
+  // Agrupado, o cliente já está no cabeçalho do pedido: a coluna só repetiria o nome.
+  return todas.filter((c) => (ESSENCIAIS.includes(c.id) || S.cols[c.id]) && !(agr && c.id === 'cliente'));
 }
 
 // ---------------------------------------------------------------- render
@@ -290,10 +299,10 @@ function renderFiltros() {
 
   const colunasEl = $('pg-colunas');
   const aberto = colunasEl.querySelector('details')?.open;
-  const grupos = [['consumos', 'Consumos (bobina, EPS, cola, tinta)'], ['parafusos', 'Parafusos'], ['componentes', 'Componentes'], ['terceiros', 'Terceiros']];
-  colunasEl.innerHTML = `<details${aberto ? ' open' : ''}><summary>Colunas</summary><div class="pg-multi-caixa">${grupos
-    .map(([k, t]) => `<label><input type="checkbox" data-coluna="${k}"${S.cols[k] ? ' checked' : ''}> ${esc(t)}</label>`)
-    .join('')}</div></details>`;
+  colunasEl.innerHTML = `<details${aberto ? ' open' : ''}><summary>Colunas</summary><div class="pg-multi-caixa pg-caixa-larga">
+    <div class="pg-menu-titulo">Sempre visíveis: pedido, cliente, prazo, situação, produto, medidas, programado para e produzido em.</div>
+    ${OPCIONAIS.map(([grupo, lista]) => `<div class="pg-menu-titulo">${esc(grupo)}</div>${lista.map(([id, rot]) => `<label><input type="checkbox" data-coluna="${id}"${S.cols[id] ? ' checked' : ''}> ${esc(rot)}</label>`).join('')}`).join('')}
+    <hr><button type="button" class="pg-menu-btn" data-coluna-padrao>Voltar ao padrão</button></div></details>`;
 
   const massaSit = $('pg-massa-situacao');
   if (massaSit.options.length <= 1) massaSit.insertAdjacentHTML('beforeend', o.situacoes.map((s) => `<option value="${s.valor}">${esc(s.rotulo)}</option>`).join(''));
@@ -307,6 +316,41 @@ function renderFiltros() {
   $('pg-soalertas').checked = S.f.soAlertas;
   $('pg-agrupar').checked = S.agrupar;
   renderSalvas();
+  renderChips();
+}
+
+const ROTULO_FILTRO = { situacao: 'Situação', statusPrazo: 'Prazo', rota: 'Rota', produto: 'Produto', tipo: 'Tipo', cor: 'Cor' };
+const ROTULO_DATA = { prazo: 'Prazo', programacao: 'Programação', producao: 'Produção', entrega: 'Entrega' };
+
+function nomeDoValor(k, v) {
+  const o = S.dados.opcoes;
+  const achar = {
+    situacao: () => o.situacoes.find((x) => x.valor === v)?.rotulo,
+    statusPrazo: () => o.statusPrazo.find((x) => x.valor === v)?.rotulo,
+    rota: () => (v === 'sem' ? 'Sem rota' : `Rota ${v}`),
+    produto: () => o.categorias.find((x) => x.valor === v)?.rotulo,
+    tipo: () => NOMES_TIPO[v],
+    cor: () => (v === '' ? 'Sem cor' : o.cores.find((x) => String(x.id) === v)?.nome),
+  }[k];
+  return achar?.() ?? v;
+}
+
+/** Filtros ativos viram "chips" removíveis um a um, e o botão Filtros mostra quantos há. */
+function renderChips() {
+  const chips = [];
+  for (const k of CAMPOS_FILTRO) {
+    if (!S.f[k].length) continue;
+    const nomes = S.f[k].map((v) => nomeDoValor(k, v));
+    chips.push([k, `${ROTULO_FILTRO[k]}: ${nomes.length <= 2 ? nomes.join(', ') : `${nomes.length} selecionados`}`]);
+  }
+  if (S.f.de || S.f.ate) chips.push(['data', `${ROTULO_DATA[S.f.campoData]}: ${fmtData(S.f.de) || '…'} a ${fmtData(S.f.ate) || '…'}`]);
+  if (S.f.soAlertas) chips.push(['alertas', 'Só com alerta']);
+
+  $('pg-chips').innerHTML = chips.map(([k, t]) => `<span class="pg-chip">${esc(t)}<button type="button" data-chip="${k}" aria-label="Remover filtro ${esc(t)}">×</button></span>`).join('');
+  $('pg-chips-linha').hidden = chips.length === 0;
+  const cont = $('pg-cont-filtros');
+  cont.hidden = chips.length === 0;
+  cont.textContent = String(chips.length);
 }
 
 function renderSalvas() {
@@ -325,9 +369,11 @@ function gravarVisoes(v) {
   try { localStorage.setItem(CHAVE_VISOES, JSON.stringify(v)); } catch { mostrarToast('Não foi possível guardar a visão neste navegador.'); }
 }
 
+const DICA_ORIGEM = { n: 'Vem da Nomus (somente leitura)', p: 'Preenchido pelo PCP (editável)', c: 'Calculado pelo sistema' };
+
 function cabecalho(cols) {
   return `<tr><th><input type="checkbox" id="pg-sel-todos" title="Selecionar todos os itens listados"${pc() ? '' : ' hidden'}></th>${cols
-    .map((c) => `<th>${esc(c.t)}${ORIGEM[c.o] || ''}</th>`)
+    .map((c) => `<th title="${esc(DICA_ORIGEM[c.o] || '')}">${esc(c.t)}${c.o === 'p' && pc() ? '<span class="pg-lapis" aria-hidden="true">✎</span>' : ''}</th>`)
     .join('')}</tr>`;
 }
 
@@ -364,12 +410,16 @@ function renderTabela() {
       const fechado = S.colapsados.has(l.pedidoId);
       const todosSel = grupo.every((x) => S.sel.has(x.id));
       const alertas = grupo.reduce((s, x) => s + x.alertas.length, 0);
+      const rotuloRota = l.rota ? `Rota ${l.rota.id}` : '<em class="pg-sem-rota">sem rota</em>';
       linhas.push(
         `<tr class="grp" data-grupo="${l.pedidoId}"><td>${pc() ? `<input type="checkbox" data-sel-pedido="${l.pedidoId}"${todosSel ? ' checked' : ''}>` : ''}</td>
-         <td colspan="${cols.length}"><button type="button" class="tg" data-toggle="${l.pedidoId}" aria-expanded="${!fechado}">${fechado ? '▸' : '▾'}</button>
-         <button type="button" class="pg-ped" data-abrir="${l.pedidoId}">Pedido ${l.numeroPedido}</button> · ${esc(l.cliente)} · ${esc(l.cidade || 'sem cidade')} ·
-         ${grupo.length} ${grupo.length === 1 ? 'item' : 'itens'} · ${brl(l.valorPedido)} ·
-         prazo ${esc(fmtData(l.prazoVigente) || '—')}${alertas ? ` <span class="pg-alerta" title="${alertas} alerta(s) nos itens">${alertas}</span>` : ''}</td></tr>`
+         <td colspan="${cols.length}"><div class="pg-grp-cab">
+           <button type="button" class="tg" data-toggle="${l.pedidoId}" aria-expanded="${!fechado}" title="${fechado ? 'Mostrar' : 'Recolher'} itens">${fechado ? '▸' : '▾'}</button>
+           <button type="button" class="pg-ped" data-abrir="${l.pedidoId}" title="Abrir o pedido">Pedido ${l.numeroPedido}</button>
+           <span class="cli">${esc(l.cliente)}</span>
+           <span class="meta">${esc(l.cidade || 'sem cidade')} · ${rotuloRota} · ${grupo.length} ${grupo.length === 1 ? 'item' : 'itens'}</span>
+           <span class="dir">${alertas ? `<span class="pg-alerta" title="${alertas} alerta(s) nos itens">⚠ ${alertas}</span>` : ''}<b>${brl(l.valorPedido)}</b></span>
+         </div></td></tr>`
       );
       if (!fechado) grupo.forEach((x, i) => linhas.push(linhaItem(x, i === 0)));
     }
@@ -679,7 +729,31 @@ $('pg-agrupar').addEventListener('change', (e) => {
 $('pg-colunas').addEventListener('change', (e) => {
   if (!e.target.dataset.coluna) return;
   S.cols[e.target.dataset.coluna] = e.target.checked;
+  gravarColunas();
   renderTabela();
+});
+
+$('pg-colunas').addEventListener('click', (e) => {
+  if (e.target.dataset.colunaPadrao === undefined) return;
+  S.cols = {};
+  gravarColunas();
+  renderFiltros();
+  renderTabela();
+});
+
+$('pg-btn-filtros').addEventListener('click', () => {
+  const painel = $('pg-painel-filtros');
+  painel.hidden = !painel.hidden;
+  $('pg-btn-filtros').setAttribute('aria-expanded', String(!painel.hidden));
+});
+
+$('pg-chips').addEventListener('click', (e) => {
+  const k = e.target.dataset.chip;
+  if (!k) return;
+  if (k === 'data') Object.assign(S.f, { de: '', ate: '' });
+  else if (k === 'alertas') S.f.soAlertas = false;
+  else S.f[k] = [];
+  carregar();
 });
 
 // Fecha as caixas de seleção ao clicar fora delas.

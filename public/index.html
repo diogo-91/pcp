@@ -195,8 +195,28 @@
 
           <div class="pg-visoes" id="pg-visoes" role="tablist" aria-label="Visões"></div>
 
-          <div class="pg-filtros">
-            <input id="pg-busca" type="search" placeholder="Buscar pedido, cliente, cidade, produto ou OP..." aria-label="Buscar na programação">
+          <div class="pg-ferramentas">
+            <input id="pg-busca" type="search" placeholder="Buscar pedido, cliente, cidade, produto ou OP…" aria-label="Buscar na programação">
+            <button type="button" class="btn-sync" id="pg-btn-filtros" aria-expanded="false" aria-controls="pg-painel-filtros">Filtros <span class="pg-contador" id="pg-cont-filtros" hidden></span></button>
+            <div class="pg-multi" id="pg-colunas"></div>
+            <div class="pg-multi" id="pg-mais">
+              <details><summary>Mais</summary>
+                <div class="pg-multi-caixa pg-caixa-larga">
+                  <label><input type="checkbox" id="pg-agrupar" checked> Agrupar itens por pedido</label>
+                  <hr>
+                  <div class="pg-menu-titulo">Visões salvas (neste navegador)</div>
+                  <select id="pg-salvas" aria-label="Visões salvas"><option value="">Escolher…</option></select>
+                  <button type="button" class="pg-menu-btn" id="pg-salvar-visao">Salvar os filtros atuais como visão</button>
+                  <button type="button" class="pg-menu-btn" id="pg-excluir-visao" hidden>Excluir a visão escolhida</button>
+                  <hr>
+                  <button type="button" class="pg-menu-btn" id="pg-exportar">Exportar CSV da visão atual</button>
+                  <button type="button" class="pg-menu-btn" id="pg-config-abrir">Configurações e importação…</button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="pg-filtros pg-painel" id="pg-painel-filtros" hidden>
             <div class="pg-multi" id="pg-f-situacao"></div>
             <div class="pg-multi" id="pg-f-statusPrazo"></div>
             <div class="pg-multi" id="pg-f-rota"></div>
@@ -210,22 +230,12 @@
               </select>
               <input type="date" id="pg-de" aria-label="De"><span>até</span><input type="date" id="pg-ate" aria-label="Até">
             </div>
-            <label class="pg-check"><input type="checkbox" id="pg-soalertas"> Só alertas</label>
+            <label class="pg-check"><input type="checkbox" id="pg-soalertas"> Só itens com alerta</label>
           </div>
 
-          <div class="pg-barra">
-            <div class="pg-barra-esq">
-              <label class="pg-check"><input type="checkbox" id="pg-agrupar" checked> Agrupar por pedido</label>
-              <div class="pg-multi" id="pg-colunas"></div>
-              <select id="pg-salvas" aria-label="Visões salvas"><option value="">Visões salvas…</option></select>
-              <button type="button" class="btn-sync" id="pg-salvar-visao">Salvar visão</button>
-              <button type="button" class="btn-sync" id="pg-excluir-visao" hidden>Excluir</button>
-              <button type="button" class="btn-sync" id="pg-limpar">Limpar filtros</button>
-            </div>
-            <div class="pg-barra-dir">
-              <button type="button" class="btn-sync" id="pg-exportar">Exportar CSV</button>
-              <button type="button" class="btn-sync" id="pg-config-abrir">Configurações</button>
-            </div>
+          <div class="pg-chips-linha" id="pg-chips-linha" hidden>
+            <span class="pg-sub">Filtrando por:</span><span id="pg-chips"></span>
+            <button type="button" class="pg-link" id="pg-limpar">Limpar tudo</button>
           </div>
 
           <div class="pg-massa" id="pg-massa" hidden>

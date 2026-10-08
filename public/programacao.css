@@ -181,3 +181,58 @@
 .pg-cartao:hover{border-color:#e9ca71;background:#fffdf6}
 .pg-dia:has(.pg-cartao:active){outline:2px dashed #e0ab28}
 @media(max-width:900px){.pg-agenda{grid-template-columns:1fr}.pg-lateral{position:static;max-height:300px}}
+
+/* ================= Refinamento de usabilidade da aba Pedidos ================= */
+/* indicadores mais compactos */
+.pg-stats{gap:10px}
+.pg-stat{min-height:76px;padding:11px 13px;gap:2px}
+.pg-stat strong{font-size:22px}
+.pg-stat small{font-size:10.5px}
+
+/* barra de ferramentas: busca + 3 botões; o resto fica recolhido */
+.pg-ferramentas{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px 6px}
+.pg-ferramentas input[type=search]{flex:1 1 280px;min-width:200px;border:1px solid #dce4ec;border-radius:9px;padding:9px 12px;font-size:13px;background:#fff}
+.pg-ferramentas input[type=search]:focus{outline:0;border-color:#e0ab28;box-shadow:0 0 0 3px #e0ab2826}
+.pg-ferramentas .btn-sync,.pg-ferramentas .pg-multi summary{padding:9px 13px;font-size:12.5px;font-weight:700}
+.pg-contador{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:#162535;color:#fff;font-size:10px;font-weight:800;padding:0 5px;margin-left:4px}
+.pg-contador[hidden]{display:none}
+.pg-painel{margin:0 16px 8px;padding:12px;background:#f6f8fb;border:1px solid var(--line);border-radius:10px}
+.pg-painel[hidden],.pg-chips-linha[hidden]{display:none}
+.pg-chips-linha{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:2px 16px 8px}
+.pg-chip{display:inline-flex;align-items:center;gap:4px;background:#fff7dc;border:1px solid #f0d98b;color:#6f4b00;border-radius:16px;padding:3px 4px 3px 10px;font-size:12px;font-weight:650;margin-right:5px}
+.pg-chip button{border:0;background:none;width:20px;height:20px;border-radius:50%;font-size:15px;line-height:1;color:#8a5a00}
+.pg-chip button:hover{background:#f0d98b}
+.pg-link{border:0;background:none;color:#2f5c96;font-size:12px;font-weight:700;text-decoration:underline;padding:2px 4px}
+.pg-caixa-larga{min-width:290px}
+.pg-multi:last-child .pg-multi-caixa,#pg-mais .pg-multi-caixa{left:auto;right:0}
+.pg-menu-titulo{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8a9aab;padding:8px 8px 3px}
+.pg-menu-btn{display:block;width:100%;text-align:left;border:0;background:none;padding:8px;border-radius:7px;font-size:12px;color:#26394e}
+.pg-menu-btn:hover{background:#f6f8fb}
+#pg-mais select{width:calc(100% - 16px);margin:2px 8px 6px;border:1px solid #dce4ec;border-radius:8px;padding:6px 8px;font-size:12px}
+#pg-mais [hidden]{display:none}
+
+/* tabela: respiro, primeira coluna fixa ao rolar, cabeçalho de pedido legível */
+.pg-wrap{max-height:calc(100vh - 260px)}
+.pg-tabela td{padding:8px 10px}
+.pg-tabela th{padding:10px;font-size:10.5px}
+.pg-tabela th:first-child,.pg-tabela td:first-child{position:sticky;left:0;z-index:4;width:34px;min-width:34px;background:inherit}
+.pg-tabela td:first-child{background:#fff}
+.pg-tabela th:first-child{z-index:7}
+.pg-tabela tr.grp td:first-child{background:#eef3f8}
+.pg-tabela tr.sel td:first-child{background:#fff6d6}
+.pg-tabela tbody tr:hover td:first-child{background:#fffdf6}
+.pg-tabela th:nth-child(2),.pg-tabela td:nth-child(2){min-width:96px}
+.pg-lapis{margin-left:5px;color:#c4a24a;font-size:10px}
+.pg-grp-cab{display:flex;align-items:center;gap:10px;position:sticky;left:42px;min-width:min(900px,calc(100vw - 340px));font-weight:600}
+.pg-grp-cab .cli{font-weight:800;color:#162535;overflow:hidden;text-overflow:ellipsis;max-width:340px}
+.pg-grp-cab .meta{color:#6c7d8f;font-weight:600;font-size:12px}
+.pg-grp-cab .dir{margin-left:auto;display:flex;gap:12px;align-items:center}
+.pg-sem-rota{color:#b4690e;font-style:normal;font-weight:700}
+.pg-prazo{white-space:nowrap}
+.pg-prazo i{font-style:normal;font-size:10px;color:#8a5a00;background:#fff1cc;border-radius:4px;padding:0 4px;margin-left:4px;font-weight:700}
+.pg-aviso-mini{color:#b4690e;font-size:11.5px;font-weight:650}
+.pg-alerta{font-size:11px;width:auto;min-width:0;padding:0 6px;height:18px;margin-left:6px;color:#8a5a00}
+.pg-tabela td .pg-tag{margin-top:3px;font-size:10.5px;padding:2px 8px}
+.pg-in.sit{width:140px}
+.pg-in.data{width:120px}
+@media(max-width:760px){.pg-grp-cab{position:static;min-width:0;flex-wrap:wrap}}
