@@ -73,6 +73,159 @@ const MIGRATIONS: string[] = [
   ALTER TABLE pedidos ADD COLUMN prazo_producao TEXT;
   ALTER TABLE pedidos ADD COLUMN producao_itens TEXT;
   `,
+  // Módulo Programação de Produção (substitui a aba Base da planilha). Tabelas próprias, separadas da tabela de
+  // pedidos do PCP: a sincronização da Nomus só escreve as colunas "Nomus"; situação, datas, observação e rota são do PCP.
+  `
+  ALTER TABLE pessoas ADD COLUMN municipio TEXT;
+  ALTER TABLE pessoas ADD COLUMN uf TEXT;
+
+  CREATE TABLE pcp_rota (
+    id   INTEGER PRIMARY KEY,
+    nome TEXT NOT NULL
+  );
+  CREATE TABLE pcp_cidade_rota (
+    cidade_chave TEXT PRIMARY KEY,
+    cidade       TEXT NOT NULL,
+    rota_id      INTEGER NOT NULL REFERENCES pcp_rota(id)
+  );
+  CREATE TABLE pcp_cor (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome    TEXT NOT NULL UNIQUE,
+    ral     TEXT NOT NULL DEFAULT '',
+    palavras TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE TABLE pcp_material (
+    codigo  TEXT PRIMARY KEY,
+    nome    TEXT NOT NULL,
+    unidade TEXT NOT NULL,
+    grupo   TEXT NOT NULL
+  );
+  CREATE TABLE pcp_parametro (
+    chave     TEXT PRIMARY KEY,
+    valor     REAL NOT NULL,
+    descricao TEXT NOT NULL DEFAULT ''
+  );
+  -- Cache dos produtos da Nomus + de-para para a categoria (corrigível: categoria_manual = 1 não é refeita).
+  CREATE TABLE pcp_produto_nomus (
+    nomus_id         INTEGER PRIMARY KEY,
+    codigo           TEXT NOT NULL DEFAULT '',
+    descricao        TEXT NOT NULL DEFAULT '',
+    tipo_produto     TEXT NOT NULL DEFAULT '',
+    unidade          TEXT NOT NULL DEFAULT '',
+    categoria        TEXT NOT NULL,
+    categoria_manual INTEGER NOT NULL DEFAULT 0,
+    buscado_em       TEXT NOT NULL
+  );
+
+  CREATE TABLE pcp_pedido (
+    id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nomus_pedido_id                 INTEGER NOT NULL UNIQUE,
+    numero_pedido                   INTEGER NOT NULL,
+    data_pedido                     TEXT,
+    cliente_nome                    TEXT NOT NULL DEFAULT '',
+    cliente_telefone                TEXT NOT NULL DEFAULT '',
+    cidade                          TEXT NOT NULL DEFAULT '',
+    uf                              TEXT NOT NULL DEFAULT '',
+    rota_id                         INTEGER REFERENCES pcp_rota(id),
+    rota_manual                     INTEGER NOT NULL DEFAULT 0,
+    data_entrega_cliente_original   TEXT,
+    data_entrega_cliente_negociada  TEXT,
+    valor_centavos                  INTEGER,
+    status_nomus                    TEXT NOT NULL DEFAULT '',
+    observacao                      TEXT NOT NULL DEFAULT '',
+    nomus_hash                      TEXT NOT NULL DEFAULT '',
+    nomus_sincronizado_em           TEXT,
+    created_at                      TEXT NOT NULL,
+    updated_at                      TEXT NOT NULL,
+    updated_by                      TEXT NOT NULL DEFAULT 'sync'
+  );
+  CREATE INDEX idx_pcp_pedido_numero ON pcp_pedido (numero_pedido);
+
+  CREATE TABLE pcp_pedido_item (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id                INTEGER NOT NULL REFERENCES pcp_pedido(id),
+    nomus_item_id            INTEGER NOT NULL UNIQUE,
+    item_seq                 TEXT NOT NULL DEFAULT '',
+    produto_nomus_id         INTEGER,
+    produto_codigo           TEXT NOT NULL DEFAULT '',
+    produto_categoria        TEXT NOT NULL DEFAULT 'OUTROS',
+    tipo_pintura             TEXT,
+    cor_id                   INTEGER REFERENCES pcp_cor(id),
+    descricao_produto        TEXT NOT NULL DEFAULT '',
+    info_adicional           TEXT NOT NULL DEFAULT '',
+    quantidade               REAL,
+    medidas                  TEXT NOT NULL DEFAULT '[]',
+    medidas_origem           TEXT NOT NULL DEFAULT 'nenhuma',
+    trapezio                 TEXT,
+    faces_pintura            INTEGER NOT NULL DEFAULT 0,
+    metros_telha             REAL NOT NULL DEFAULT 0,
+    metros_chapa             REAL NOT NULL DEFAULT 0,
+    -- Campos derivados que a equipe corrigiu à mão (JSON): a sincronização não os refaz.
+    campos_manuais           TEXT NOT NULL DEFAULT '[]',
+    situacao_pcp             TEXT NOT NULL DEFAULT 'PROGRAMAR',
+    data_programacao         TEXT,
+    data_liberacao_producao  TEXT,
+    data_produzida           TEXT,
+    data_entrega_realizada   TEXT,
+    fornecedor_terceiro      TEXT NOT NULL DEFAULT '',
+    data_entrega_terceiro    TEXT,
+    removido_no_erp          INTEGER NOT NULL DEFAULT 0,
+    alterado_no_erp          INTEGER NOT NULL DEFAULT 0,
+    nomus_hash               TEXT NOT NULL DEFAULT '',
+    created_at               TEXT NOT NULL,
+    updated_at               TEXT NOT NULL,
+    updated_by               TEXT NOT NULL DEFAULT 'sync'
+  );
+  CREATE INDEX idx_pcp_item_pedido ON pcp_pedido_item (pedido_id);
+  CREATE INDEX idx_pcp_item_situacao ON pcp_pedido_item (situacao_pcp);
+
+  CREATE TABLE pcp_item_op (
+    item_id       INTEGER NOT NULL REFERENCES pcp_pedido_item(id),
+    nomus_op_id   INTEGER NOT NULL,
+    numero_op     TEXT NOT NULL,
+    status_op     TEXT NOT NULL DEFAULT '',
+    inicio_planejado TEXT,
+    PRIMARY KEY (item_id, nomus_op_id)
+  );
+
+  CREATE TABLE pcp_item_consumo (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id     INTEGER NOT NULL REFERENCES pcp_pedido_item(id),
+    material    TEXT NOT NULL REFERENCES pcp_material(codigo),
+    cor_id      INTEGER REFERENCES pcp_cor(id),
+    quantidade  REAL NOT NULL,
+    unidade     TEXT NOT NULL,
+    origem      TEXT NOT NULL,
+    calculado_em TEXT NOT NULL
+  );
+  CREATE INDEX idx_pcp_consumo_item ON pcp_item_consumo (item_id);
+
+  CREATE TABLE pcp_evento (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidade     TEXT NOT NULL,
+    entidade_id  INTEGER NOT NULL,
+    pedido_id    INTEGER,
+    campo        TEXT NOT NULL,
+    valor_antigo TEXT,
+    valor_novo   TEXT,
+    usuario      TEXT NOT NULL,
+    origem       TEXT NOT NULL DEFAULT 'usuario',
+    em           TEXT NOT NULL
+  );
+  CREATE INDEX idx_pcp_evento_entidade ON pcp_evento (entidade, entidade_id);
+  CREATE INDEX idx_pcp_evento_pedido ON pcp_evento (pedido_id);
+
+  CREATE TABLE pcp_sync_programacao (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    iniciado_em TEXT NOT NULL,
+    finalizado_em TEXT,
+    pedidos_lidos INTEGER NOT NULL DEFAULT 0,
+    criados     INTEGER NOT NULL DEFAULT 0,
+    atualizados INTEGER NOT NULL DEFAULT 0,
+    erros       INTEGER NOT NULL DEFAULT 0,
+    detalhe_erros TEXT
+  );
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

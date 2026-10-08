@@ -37,12 +37,18 @@ const estado = {
 
 // ---------------------------------------------------------------- API
 const CHAVE_TOKEN = 'pcp_token';
+const lerUsuario = () => { try { return localStorage.getItem('pcp_usuario') || ''; } catch { return ''; } };
 const lerToken = () => { try { return localStorage.getItem(CHAVE_TOKEN) || ''; } catch { return ''; } };
 const gravarToken = (t) => { try { t ? localStorage.setItem(CHAVE_TOKEN, t) : localStorage.removeItem(CHAVE_TOKEN); } catch { /* sem storage: pede de novo */ } };
 
 async function api(caminho, opcoes = {}) {
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const headers = { ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}), ...(lerToken() ? { 'x-pcp-token': lerToken() } : {}) };
+    const headers = {
+      ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(lerToken() ? { 'x-pcp-token': lerToken() } : {}),
+      // Quem editou (vai para o histórico da Programação). Codificado: nome com acento não cabe cru num cabeçalho HTTP.
+      ...(lerUsuario() ? { 'x-pcp-usuario': encodeURIComponent(lerUsuario()) } : {}),
+    };
     const res = await fetch(caminho, { ...opcoes, headers });
 
     if (res.status === 401) {
@@ -478,6 +484,7 @@ async function acompanharSync() {
       }
     }
     await carregar({ silencioso: true });
+    window.PCP?.programacao?.recarregar?.(); // a Programação é gravada na mesma rodada
   } catch (erro) {
     aviso(`Não foi possível acompanhar a sincronização: ${erro.message}`);
   } finally {
@@ -500,8 +507,10 @@ $('btn-sync').addEventListener('click', async () => {
 function mostrarView(qual, { rolarTopo = true } = {}) {
   $('view-dashboard').hidden = qual !== 'dashboard';
   $('view-tabela').hidden = qual !== 'tabela';
+  $('view-programacao').hidden = qual !== 'programacao';
   document.querySelectorAll('.navtab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === qual)));
-  $('crumb').textContent = qual === 'dashboard' ? 'Dashboard' : 'Tabela de pedidos';
+  $('crumb').textContent = { dashboard: 'Dashboard', tabela: 'Tabela de pedidos', programacao: 'Programação de produção' }[qual] || 'Dashboard';
+  if (qual === 'programacao') window.PCP?.programacao?.ativar?.();
   if (rolarTopo) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -569,5 +578,8 @@ setInterval(() => {
   const editando = document.activeElement?.closest?.('#linhas') || salvandoAgora > 0;
   if (!editando && !document.hidden) carregar({ silencioso: true });
 }, 60_000);
+
+// Peças que o módulo Programação (programacao.js) reaproveita: mesmo token, mesmos avisos.
+window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario };
 
 carregar();

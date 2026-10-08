@@ -1,8 +1,13 @@
+import { dirname, join } from "node:path";
 import { buildApp } from "./app";
 import { loadConfigFromEnvFile, problemasDeConfiguracao } from "./config";
 import { openDatabase } from "./db";
 import { NomusClient } from "./nomus";
 import { PlanejamentoService, montarEndpoint } from "./planejamento";
+import { importarDeArquivo } from "./programacao/importacao";
+import { ProgramacaoRepository } from "./programacao/repo";
+import { ProgramacaoService } from "./programacao/service";
+import { ProgramacaoSync } from "./programacao/sync";
 import { PcpRepository } from "./repository";
 import { SyncService, type Logger } from "./sync";
 
@@ -30,9 +35,18 @@ const nomus = new NomusClient({
   timeoutMs: config.nomusTimeoutMs,
 });
 
+const progRepo = new ProgramacaoRepository(db);
+const progLog: Logger = { info: (m) => console.log(`[programacao] ${m}`), warn: (m) => console.warn(`[programacao] ${m}`) };
+const progSync = new ProgramacaoSync(nomus, progRepo, {
+  statusLiberado: config.nomusStatusLiberado,
+  statusCancelado: config.nomusStatusCancelado,
+  log: progLog,
+});
+
 const sync = new SyncService(nomus, repo, {
   statusLiberado: config.nomusStatusLiberado,
   diasExtraEntrega: config.entregaDiasExtra,
+  programacao: progSync,
   log,
 });
 
@@ -47,7 +61,12 @@ const app = await buildApp({
   repo,
   sync,
   planejamento,
+  programacao: new ProgramacaoService(progRepo),
+  sincronizarPedidoProgramacao: (id) => progSync.sincronizarPedido(id),
+  importarPlanilhaProgramacao: (arquivo, o) =>
+    importarDeArquivo(arquivo, { db, repo: progRepo, gravar: o.gravar, forcar: o.forcar, pastaBackup: join(dirname(config.databaseFile), "backups-operacoes") }),
   accessToken: config.accessToken,
+  accessTokenConsulta: config.accessTokenConsulta,
   logger: true,
   trustProxyHops: config.trustProxyHops,
   publico: { origens: config.publicOrigins },

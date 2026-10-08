@@ -13,6 +13,10 @@ export interface AppConfig {
   syncIntervalMs: number;
   /** Se definido, /api/* (exceto /api/health) exige o header `x-pcp-token` com este valor. */
   accessToken: string;
+  /** Segundo código, de perfil "consulta" (só lê a Programação, sem telefones nem edição). Vazio = não existe. */
+  accessTokenConsulta: string;
+  /** Códigos de itensPedido[].status que a Nomus usa para "cancelado" (vazio = ainda não identificado). */
+  nomusStatusCancelado: number[];
   /** Origens (sites) autorizadas a chamar a consulta pública do navegador. Vazio = qualquer uma. */
   publicOrigins: string[];
   /**
@@ -27,6 +31,8 @@ export interface AppConfig {
   /** Dias somados ao prazo de entrega da Nomus quando um pedido novo entra na tabela. Padrão: 20. */
   entregaDiasExtra: number;
 }
+
+const v_ok = (n: number) => Number.isInteger(n) && n >= 0;
 
 function hopsDoProxy(env: NodeJS.ProcessEnv): number {
   const padrao = env.NODE_ENV === "production" ? 1 : 0;
@@ -58,6 +64,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // dashboard do MES), então o padrão é 1 h. O botão "Sincronizar" força uma rodada quando precisar.
     syncIntervalMs: Number(env.SYNC_INTERVAL_MS ?? 60 * 60 * 1000),
     accessToken: env.ACCESS_TOKEN ?? "",
+    accessTokenConsulta: (env.ACCESS_TOKEN_CONSULTA ?? "").trim(),
+    nomusStatusCancelado: (env.NOMUS_STATUS_CANCELADO ?? "").split(",").map((v) => Number(v.trim())).filter((n) => v_ok(n)),
     publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
     trustProxyHops: hopsDoProxy(env),
     planejamentoUrl: (env.PLANEJAMENTO_URL ?? "").trim(),
@@ -86,6 +94,11 @@ export function problemasDeConfiguracao(config: AppConfig, env: NodeJS.ProcessEn
     problemas.push("ACCESS_TOKEN não definido: sem ele qualquer pessoa com o endereço vê nomes e telefones de clientes e edita a tabela. Defina um código de acesso.");
   } else if (config.accessToken && config.accessToken.length < 8) {
     problemas.push("ACCESS_TOKEN muito curto: use pelo menos 8 caracteres.");
+  }
+  if (config.accessTokenConsulta && config.accessTokenConsulta === config.accessToken) {
+    problemas.push("ACCESS_TOKEN_CONSULTA igual ao ACCESS_TOKEN: use um código diferente para o perfil de consulta.");
+  } else if (config.accessTokenConsulta && config.accessTokenConsulta.length < 8) {
+    problemas.push("ACCESS_TOKEN_CONSULTA muito curto: use pelo menos 8 caracteres.");
   }
   if (!config.nomusBaseUrl) problemas.push("NOMUS_BASE_URL não definido.");
   if (!config.nomusToken) problemas.push("NOMUS_TOKEN não definido.");

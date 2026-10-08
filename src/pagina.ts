@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Arquivos que o index.html carrega e que mudam a cada versão da tela. */
-const ARQUIVOS_DA_TELA = ["style.css", "app.css", "app.js"];
+const ARQUIVOS_DA_TELA = ["style.css", "app.css", "app.js", "programacao.css", "programacao.js"];
 
 /**
  * Devolve o index.html com cada arquivo da tela pedido por um endereço que muda quando o CONTEÚDO muda
@@ -15,6 +15,7 @@ export function paginaInicial(pastaPublica: string): string {
   let html = readFileSync(join(pastaPublica, "index.html"), "utf8");
 
   for (const nome of ARQUIVOS_DA_TELA) {
+    if (!html.includes(`"/${nome}"`)) continue; // só versiona o que o HTML realmente pede
     const versao = createHash("sha1").update(readFileSync(join(pastaPublica, nome))).digest("hex").slice(0, 10);
     html = html.replaceAll(`"/${nome}"`, `"/${nome}?v=${versao}"`);
   }

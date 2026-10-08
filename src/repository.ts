@@ -8,6 +8,9 @@ export interface PessoaCache {
   nome: string;
   telefone: string;
   buscadoEm: string;
+  /** Cidade/UF do cadastro do cliente. null = ainda não capturado (cache anterior ao módulo Programação). */
+  municipio?: string | null;
+  uf?: string | null;
 }
 
 type Linha = Record<string, unknown>;
@@ -266,6 +269,8 @@ export class PcpRepository {
           nome: l.nome as string,
           telefone: l.telefone as string,
           buscadoEm: l.buscado_em as string,
+          municipio: (l.municipio as string | null) ?? null,
+          uf: (l.uf as string | null) ?? null,
         });
       }
     }
@@ -275,12 +280,13 @@ export class PcpRepository {
 
   salvarPessoas(pessoas: PessoaCache[]): void {
     const upsert = this.db.prepare(`
-      INSERT INTO pessoas (nomus_id, nome, telefone, buscado_em) VALUES (?, ?, ?, ?)
-      ON CONFLICT(nomus_id) DO UPDATE SET nome = excluded.nome, telefone = excluded.telefone, buscado_em = excluded.buscado_em
+      INSERT INTO pessoas (nomus_id, nome, telefone, buscado_em, municipio, uf) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(nomus_id) DO UPDATE SET nome = excluded.nome, telefone = excluded.telefone, buscado_em = excluded.buscado_em,
+        municipio = excluded.municipio, uf = excluded.uf
     `);
 
     inTransaction(this.db, () => {
-      for (const p of pessoas) upsert.run(p.nomusId, p.nome, p.telefone, p.buscadoEm);
+      for (const p of pessoas) upsert.run(p.nomusId, p.nome, p.telefone, p.buscadoEm, p.municipio ?? null, p.uf ?? null);
     });
   }
 

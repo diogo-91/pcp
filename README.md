@@ -97,12 +97,45 @@ npm run importar -- /tmp/backup.json --atualizar
 |---|---|
 | `GET /api/pedidos` | Pedidos da tabela, resumo por faixa de prazo, `ocultosMuitoAtrasados` (quantos somem por atraso de 90+ dias), opções dos selects e estado da sincronização. `?finalizados=1` inclui encerrados/cancelados; `?antigos=1` inclui os muito atrasados. |
 | `PATCH /api/pedidos/:id` | Grava campos editáveis: `prazoEntrega`, `statusPcp`, `atendimento`, `responsavel`, `acao`, `prazoAcao`, `acaoStatus`. Datas AAAA-MM-DD entre 2000 e 2100 (vazio limpa). Número do pedido, cliente e telefone são recusados. |
+| `GET /api/programacao` | **Programação de produção**: itens já calculados (status de prazo, pronta entrega, alertas), totais, indicadores e opções. Filtros: `visao`, `situacao`, `statusPrazo`, `rota`, `produto`, `tipo`, `cor`, `campoData`+`de`+`ate`, `soAlertas=1`, `q`. |
+| `GET /api/programacao/exportar.csv` | Mesma visão filtrada em CSV (`;`, UTF-8 com BOM). |
+| `GET /api/programacao/pedidos/:id` | Detalhe: pedido, itens, OPs, consumos e histórico de alterações. |
+| `PATCH /api/programacao/itens/:id`, `PATCH /api/programacao/pedidos/:id`, `POST /api/programacao/lote` | Edição de campos do PCP (item, pedido, em massa). Validam datas e cronologia; gravam evento com o autor (`x-pcp-usuario`). |
+| `PUT /api/programacao/itens/:id/consumos` | Lança consumo manual (parafusos, componentes). |
+| `GET/PATCH /api/programacao/parametros`, `GET/PATCH /api/programacao/produtos`, `PUT /api/programacao/cidades-rota` | Configurações: parâmetros de cálculo, de-para produto → categoria, cidade → rota. |
+| `POST /api/programacao/pedidos/:id/sincronizar` | Busca esse pedido na Nomus agora. |
+| `POST /api/programacao/importar?gravar=0\|1` | Importa a planilha (corpo = o `.xlsx`). `gravar=0` só simula. |
 | `POST /api/sync` | Dispara a sincronização em segundo plano (202). |
 | `GET /api/sync` | Estado e histórico da última sincronização. |
 | `GET /api/publico/pedido?pedido=917` | **Consulta pública** (site dos clientes). Sem autenticação. Devolve só `{ success, pedido, status, prazo }`. Ver a seção abaixo. |
 | `GET /api/health` | Health check (sem autenticação). |
 
 Com `ACCESS_TOKEN`, as rotas `/api/*` (exceto health) exigem o header `x-pcp-token`.
+
+## Programação de produção (menu "Programação")
+
+Substitui a aba **Base** da planilha "Programação de Produção 2026". Um item de pedido por linha, agrupável por pedido.
+
+**De onde vem cada dado.** Os dados comerciais vêm da Nomus na **mesma varredura** de pedidos liberados que o PCP já faz (nenhuma chamada extra de pedido): pedido, data do pedido, valor, cliente, telefone, cidade/UF (cadastro do cliente), produto (`/produtos`), medidas e cor (texto livre do item) e as OPs (`/ordens`, em lotes). Situação, datas de programação/liberação/produção/entrega, prazo negociado, observação e rota são **do PCP**: a sincronização só escreve as colunas da Nomus e **nunca** sobrescreve o que foi editado. Consumos (bobina, EPS, cola, tinta) são **calculados** dos parâmetros em *Configurações*; parafusos e componentes são lançados na gaveta do pedido.
+
+**Regras corrigidas em relação à planilha** (todas calculadas no servidor, em `src/programacao/regras.ts`): item entregue nunca é "atrasado"; sem prazo é "sem data"; pronta entrega exige data produzida; valor do pedido é somado **uma vez por pedido**; cancelado/devolução ficam fora dos totais; situação é uma lista fechada (as 21 grafias da planilha caem nela); a cronologia liberação ≤ produzida ≤ entrega é validada; `PRODUZIDO` exige a data produzida e `ENTREGUE` assume hoje.
+
+**Para quem é o quê.** `ACCESS_TOKEN` dá acesso completo. Com `ACCESS_TOKEN_CONSULTA` (outro código) cria-se um perfil **somente leitura**: vê a Programação sem telefones de clientes, não edita e não acessa o resto da API. Quem edita é identificado pelo nome que a tela pede na primeira edição (vai para o histórico).
+
+**O que muda numa nova sincronização.** Item já programado cujo texto mudou na Nomus ganha o alerta "alterado no ERP após programação"; item que some do pedido é marcado "removido no ERP" (não é apagado); rodar a sincronização duas vezes não altera nada.
+
+### Importar o histórico da planilha (uma vez)
+
+Datas de liberação/produção/entrega, situação, prazo negociado e observações só existem na planilha. Em *Programação → Configurações → Importar histórico da planilha*, escolha o `.xlsx` (abas **Base** e **Rotas**) e clique em **Simular**: nada é gravado e você baixa o relatório CSV (importadas, ajustadas, rejeitadas, com o motivo e a linha da planilha). Depois **Gravar importação** (o banco é copiado antes para `backups-operacoes/`). Datas em texto ("xxx", "22/01 e 23/01") ou de antes de 2025 são rejeitadas; itens editados no sistema depois da carga são preservados. Pelo terminal: `npm run importar-planilha -- "arquivo.xlsx" [--gravar] [--forcar]`.
+
+### Perguntas em aberto (valem como parâmetro até a resposta)
+
+1. **Sanduíche**: "faces de pintura = 2" são as duas chapas pintadas por fora ou as duas faces de uma chapa? "Metros de chapa" é sempre o dobro do metro de telha? (parâmetro `fator_chapa_sanduiche` = 2; a tinta usa `faces` do produto.)
+2. **Capacidade** (`capacidade_m_dia` = 2000): é por máquina, turno ou da fábrica? O ritmo medido foi de 950 a 1.230 m por dia útil.
+3. **Bobina** (`bobina_kg_por_metro` = 3,6): corresponde a qual espessura? Deveria variar por item?
+4. **Valor a receber**: hoje é o **valor total do pedido** (`valorTotal` da Nomus). Se a intenção é o saldo financeiro em aberto, falta a fonte (contas a receber).
+5. **Liberação da produção**: a Nomus informa o **status da OP** (Confirmada, Liberada, Encerrada), mas não a data; por isso `data_liberacao_producao` segue sendo do PCP.
+6. **Cancelado/entregue na Nomus**: o pedido da Nomus não traz um campo de cancelamento e a varredura só lê itens liberados. Informe o código de status de item que significa "cancelado" em `NOMUS_STATUS_CANCELADO` para a automação (item vira `CANCELADO`, com evento de origem "sync").
 
 ## Prazo de produção (programação do Planejamento)
 

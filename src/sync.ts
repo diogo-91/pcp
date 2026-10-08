@@ -7,22 +7,42 @@ export interface NomusLeitor {
   get<T>(caminho: string): Promise<T>;
 }
 
-interface NomusItemPedido {
+export interface NomusItemPedido {
+  id?: number;
+  item?: string;
+  idProduto?: number;
+  informacoesAdicionaisProduto?: string;
+  quantidade?: string;
+  valorUnitario?: string;
   status?: number;
   dataEntrega?: string;
 }
 
-interface NomusPedidoLista {
+export interface NomusPedidoLista {
   id?: number;
   codigoPedido?: string;
   idPessoaCliente?: number;
+  dataEmissao?: string;
+  valorTotal?: string;
+  observacoes?: string;
   itensPedido?: NomusItemPedido[];
+}
+
+/** Pessoas (clientes) já consultadas, com cache: o gancho da Programação usa para não repetir chamadas. */
+export type CarregarPessoas = (ids: number[]) => Promise<Map<number, PessoaCache>>;
+
+export interface ProgramacaoGancho {
+  iniciarRodada(): void;
+  lerPagina(pedidos: NomusPedidoLista[], carregarPessoas: CarregarPessoas): Promise<void>;
+  finalizarRodada(erro: string | null): void;
 }
 
 interface NomusPessoa {
   id?: number;
   nome?: string;
   telefone?: string;
+  municipio?: string;
+  uf?: string;
 }
 
 export interface Logger {
@@ -44,6 +64,11 @@ export interface SyncOptions {
    * entrada: pedido que já está no banco nunca é alterado. Pedido sem data na Nomus continua sem prazo. Padrão: 0.
    */
   diasExtraEntrega?: number;
+  /**
+   * Como o módulo Programação recebe os pedidos: cada página de liberados lida (todos, novos e já conhecidos) é repassada,
+   * sem nenhuma chamada extra de pedido à Nomus. Erro no gancho é registrado e NUNCA interrompe a sincronização.
+   */
+  programacao?: ProgramacaoGancho;
   agora?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   log?: Logger;
@@ -105,12 +130,15 @@ export class SyncService {
     const id = this.repo.iniciarSync(gatilho, this.agora().toISOString());
     this.log.info(`Sincronização (${gatilho}) iniciada.`);
 
+    this.chamarGancho(() => this.opcoes.programacao?.iniciarRodada());
     try {
       const r = await this.sincronizar(id);
+      this.chamarGancho(() => this.opcoes.programacao?.finalizarRodada(null));
       this.repo.finalizarSync(id, { status: "ok", ...r, erro: null }, this.agora().toISOString());
       this.log.info(`Sincronização concluída: ${r.pedidosLidos} liberados na Nomus, ${r.novos} incluídos.`);
     } catch (erro) {
       const mensagem = erro instanceof Error ? erro.message : String(erro);
+      this.chamarGancho(() => this.opcoes.programacao?.finalizarRodada(mensagem));
       const parcial = this.repo.buscarSync(id);
       // Mantém o que já foi lido/gravado antes da falha: os pedidos das páginas anteriores continuam salvos.
       this.repo.finalizarSync(
@@ -127,6 +155,14 @@ export class SyncService {
     }
 
     return this.repo.buscarSync(id) as SyncRun;
+  }
+
+  private chamarGancho(fn: () => void): void {
+    try {
+      fn();
+    } catch (erro) {
+      this.log.warn(`Programação: ${String(erro)}`);
+    }
   }
 
   /**
@@ -163,6 +199,14 @@ export class SyncService {
       const existentes = this.repo.idsExistentes(daPagina.map((p) => p.id as number));
       const aIncluir = daPagina.filter((p) => !existentes.has(p.id as number));
       if (aIncluir.length > 0) novos += await this.incluirPedidos(aIncluir);
+
+      if (this.opcoes.programacao && daPagina.length > 0) {
+        try {
+          await this.opcoes.programacao.lerPagina(daPagina, (ids) => this.carregarPessoas(ids));
+        } catch (erro) {
+          this.log.warn(`Programação: falha ao processar a página ${pagina}: ${String(erro)}`);
+        }
+      }
 
       this.repo.atualizarProgressoSync(rodadaId, vistos.size, novos);
       this.log.info(`Página ${pagina}: ${vistos.size} liberados lidos, ${novos} incluídos.`);
@@ -234,7 +278,8 @@ export class SyncService {
     const cache = this.repo.buscarPessoas(ids);
     const faltam = ids.filter((id) => {
       const c = cache.get(id);
-      return !c || Date.parse(c.buscadoEm) < limite;
+      // município nulo = cache de antes do módulo Programação: busca de novo uma vez para guardar cidade/UF.
+      return !c || c.municipio == null || Date.parse(c.buscadoEm) < limite;
     });
 
     for (const lote of emLotes(faltam, this.opcoes.tamanhoLotePessoas ?? 40)) {
@@ -267,6 +312,8 @@ export class SyncService {
         nome: limpar(r.nome),
         telefone: limpar(r.telefone),
         buscadoEm,
+        municipio: limpar(r.municipio),
+        uf: limpar(r.uf).toUpperCase(),
       }));
 
       this.repo.salvarPessoas(paraSalvar);

@@ -13,6 +13,7 @@
     "sync": "tsx src/scripts/sync-once.ts",
     "exportar": "tsx src/scripts/exportar.ts",
     "importar": "tsx src/scripts/importar.ts",
+    "importar-planilha": "tsx src/scripts/importar-planilha.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts"
   },

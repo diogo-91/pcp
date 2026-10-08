@@ -61,7 +61,7 @@ test("GET / e /index.html servem a tela versionada, sem cache e SEM exigir o có
     assert.equal(r.statusCode, 200, url);
     assert.match(String(r.headers["content-type"]), /text\/html/);
     assert.equal(r.headers["cache-control"], "no-cache");
-    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "style.css"], url);
+    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "programacao.css", "programacao.js", "style.css"], url);
   }
 });
 
@@ -75,6 +75,8 @@ test("os arquivos versionados continuam sendo servidos (a query ?v= é ignorada)
   assert.match(js.body, /api\/pedidos/);
   assert.equal((await app.inject({ method: "GET", url: `/app.css?v=${v["app.css"]}` })).statusCode, 200);
   assert.equal((await app.inject({ method: "GET", url: `/style.css?v=${v["style.css"]}` })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: `/programacao.js?v=${v["programacao.js"]}` })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: `/programacao.css?v=${v["programacao.css"]}` })).statusCode, 200);
 
   assert.equal((await app.inject({ method: "GET", url: "/api/health" })).statusCode, 200);
   assert.equal((await app.inject({ method: "GET", url: "/api/pedidos" })).statusCode, 401, "a API segue protegida");

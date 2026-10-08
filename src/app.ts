@@ -6,6 +6,8 @@ import { montarPedido, montarResumo, separarMuitoAtrasados } from "./apresentaca
 import { ACAO_STATUS, ATENDIMENTO_OPCOES, STATUS_PCP, STATUS_PCP_FINAIS } from "./constants";
 import { LimitadorPorJanela } from "./limite";
 import { paginaInicial } from "./pagina";
+import { registrarProgramacao } from "./programacao/http";
+import type { ProgramacaoService } from "./programacao/service";
 import type { PlanejamentoService } from "./planejamento";
 import { hojeEmSaoPaulo } from "./prazo";
 import { consultarPedidoPublico } from "./publico";
@@ -18,8 +20,16 @@ export interface AppDeps {
   sync: SyncService;
   /** Leitura da programação da produção (Planejamento do apontamento). Opcional: sem ele a coluna fica "não programado". */
   planejamento?: PlanejamentoService;
+  /** Módulo Programação de Produção (opcional). */
+  programacao?: ProgramacaoService;
+  /** "Sincronizar este pedido" na gaveta da Programação: busca o pedido na Nomus e atualiza só ele. */
+  sincronizarPedidoProgramacao?: (nomusPedidoId: number) => Promise<unknown>;
+  /** Importação do histórico da planilha (upload do .xlsx na tela de configurações). */
+  importarPlanilhaProgramacao?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown;
   /** Vazio = sem autenticação (uso local). */
   accessToken: string;
+  /** Segundo código, de perfil "consulta": só lê a Programação, sem telefone de clientes e sem editar. Vazio = não existe. */
+  accessTokenConsulta?: string;
   logger?: boolean;
   /** Relógio injetável para os testes. */
   agora?: () => Date;
@@ -52,18 +62,31 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: confiarNosProxies(deps.trustProxyHops ?? 0) });
 
   // Os dados têm nome e telefone de clientes: com ACCESS_TOKEN definido, toda a API (menos o health) exige o token.
+  // Um segundo código (ACCESS_TOKEN_CONSULTA) dá o perfil "consulta": só lê a Programação, sem telefone e sem editar.
   if (accessToken) {
     const esperado = hash(accessToken);
+    const esperadoConsulta = deps.accessTokenConsulta ? hash(deps.accessTokenConsulta) : null;
     app.addHook("onRequest", async (request, reply) => {
       const caminho = request.url.split("?")[0];
       // A consulta pública fica fora da senha de propósito: é o que o site dos clientes chama.
       if (!caminho.startsWith("/api/") || caminho === "/api/health" || caminho.startsWith("/api/publico/")) return;
 
       const recebido = request.headers["x-pcp-token"];
-      const ok = typeof recebido === "string" && timingSafeEqual(hash(recebido), esperado);
-      if (!ok) return reply.code(401).send({ erro: "Não autorizado." });
+      if (typeof recebido === "string" && timingSafeEqual(hash(recebido), esperado)) return;
+
+      if (esperadoConsulta && typeof recebido === "string" && timingSafeEqual(hash(recebido), esperadoConsulta)) {
+        request.perfil = "consulta";
+        if (request.method !== "GET" || !caminho.startsWith("/api/programacao")) {
+          return reply.code(403).send({ erro: "Seu acesso é somente leitura (Programação)." });
+        }
+        return;
+      }
+      return reply.code(401).send({ erro: "Não autorizado." });
     });
   }
+
+  if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao);
+  else app.decorateRequest("perfil", "completo");
 
   app.get("/api/health", async () => ({ ok: true }));
 

@@ -7,6 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f3bd30'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='16' font-weight='900' text-anchor='middle' fill='%23182536'%3EGF%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/programacao.css">
 </head>
 <body>
 <main class="app">
@@ -31,6 +32,10 @@
         <button class="navtab" type="button" data-view="tabela" aria-selected="false">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
           <span>Tabela de pedidos</span>
+        </button>
+        <button class="navtab" type="button" data-view="programacao" aria-selected="false">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18M7 14h4M7 17.5h7"/></svg>
+          <span>Programação</span>
         </button>
       </nav>
       <div class="sidebar-bottom">
@@ -162,6 +167,80 @@
         </article>
       </section>
 
+      <!-- ============ PROGRAMAÇÃO DE PRODUÇÃO ============ -->
+      <section id="view-programacao" class="view" hidden>
+        <div class="viewhead">
+          <div>
+            <div class="eyebrow">PCP · PRODUÇÃO</div>
+            <h2>Programação de produção</h2>
+            <p>Um item por linha, direto da Nomus (pedido, cliente, produto, medidas, OPs). Situação, datas, rota e observações são do PCP e nunca são sobrescritas pela sincronização.</p>
+          </div>
+          <div class="viewhead-pill" id="pg-perfil">Nomus + PCP</div>
+        </div>
+
+        <section class="pg-stats" id="pg-stats" aria-label="Indicadores da programação"></section>
+
+        <article class="panel">
+          <div class="panelhead"><h2>Itens da programação</h2><small id="pg-contagem"></small></div>
+
+          <div class="pg-visoes" id="pg-visoes" role="tablist" aria-label="Visões"></div>
+
+          <div class="pg-filtros">
+            <input id="pg-busca" type="search" placeholder="Buscar pedido, cliente, cidade, produto ou OP..." aria-label="Buscar na programação">
+            <div class="pg-multi" id="pg-f-situacao"></div>
+            <div class="pg-multi" id="pg-f-statusPrazo"></div>
+            <div class="pg-multi" id="pg-f-rota"></div>
+            <div class="pg-multi" id="pg-f-produto"></div>
+            <div class="pg-multi" id="pg-f-tipo"></div>
+            <div class="pg-multi" id="pg-f-cor"></div>
+            <div class="pg-datas">
+              <select id="pg-campodata" aria-label="Campo de data do filtro">
+                <option value="prazo">Prazo vigente</option><option value="programacao">Programação</option>
+                <option value="producao">Produzida</option><option value="entrega">Entrega</option>
+              </select>
+              <input type="date" id="pg-de" aria-label="De"><span>até</span><input type="date" id="pg-ate" aria-label="Até">
+            </div>
+            <label class="pg-check"><input type="checkbox" id="pg-soalertas"> Só alertas</label>
+          </div>
+
+          <div class="pg-barra">
+            <div class="pg-barra-esq">
+              <label class="pg-check"><input type="checkbox" id="pg-agrupar" checked> Agrupar por pedido</label>
+              <div class="pg-multi" id="pg-colunas"></div>
+              <select id="pg-salvas" aria-label="Visões salvas"><option value="">Visões salvas…</option></select>
+              <button type="button" class="btn-sync" id="pg-salvar-visao">Salvar visão</button>
+              <button type="button" class="btn-sync" id="pg-excluir-visao" hidden>Excluir</button>
+              <button type="button" class="btn-sync" id="pg-limpar">Limpar filtros</button>
+            </div>
+            <div class="pg-barra-dir">
+              <button type="button" class="btn-sync" id="pg-exportar">Exportar CSV</button>
+              <button type="button" class="btn-sync" id="pg-config-abrir">Configurações</button>
+            </div>
+          </div>
+
+          <div class="pg-massa" id="pg-massa" hidden>
+            <strong id="pg-massa-n">0 selecionados</strong>
+            <select id="pg-massa-situacao" aria-label="Nova situação"><option value="">Situação…</option></select>
+            <input type="date" id="pg-massa-data" aria-label="Data de programação">
+            <select id="pg-massa-rota" aria-label="Rota"><option value="">Rota…</option></select>
+            <button type="button" class="pg-btn" id="pg-massa-aplicar">Aplicar aos selecionados</button>
+            <button type="button" class="btn-sync" id="pg-massa-limpar">Desmarcar</button>
+          </div>
+
+          <div class="pg-wrap" id="pg-wrap">
+            <table class="pg-tabela" id="pg-tabela"><thead id="pg-thead"></thead><tbody id="pg-tbody"></tbody><tfoot id="pg-tfoot"></tfoot></table>
+          </div>
+          <div class="pager"><small id="pg-salvo">&nbsp;</small><small id="pg-sync"></small></div>
+        </article>
+
+        <aside class="pg-drawer" id="pg-drawer" hidden aria-label="Detalhe do pedido"></aside>
+
+        <dialog id="pg-config" class="pg-dialog">
+          <form method="dialog" class="pg-dialog-topo"><h3>Configurações da programação</h3><button class="btn-sync">Fechar</button></form>
+          <div id="pg-config-corpo"></div>
+        </dialog>
+      </section>
+
       <div class="notice">
         Nome do cliente, número do pedido, telefone e prazo de entrega vêm da <b>Nomus</b> (pedidos com status “Liberado”) quando o pedido <b>entra</b> na tabela.
         A sincronização só <b>inclui pedidos novos</b>: um pedido que já está aqui nunca é alterado por ela, então o <b>prazo</b>, o status, o atendimento, o responsável e o plano de ação que você ajustar ficam exatamente como estão, salvos no banco de dados e compartilhados por todos.
@@ -174,5 +253,6 @@
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="/app.js"></script>
+<script type="module" src="/programacao.js"></script>
 </body>
 </html>
