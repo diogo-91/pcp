@@ -14,7 +14,7 @@ const gravarColunas = () => { try { localStorage.setItem('pcp_prog_cols', JSON.s
 
 const filtrosPadrao = () => ({
   visao: 'em_aberto', situacao: [], statusPrazo: [], rota: [], produto: [], tipo: [], cor: [],
-  campoData: 'prazo', de: '', ate: '', soAlertas: false, q: '',
+  campoData: 'prazo', de: '', ate: '', soAlertas: false, q: '', antigos: false,
 });
 
 const S = {
@@ -55,6 +55,7 @@ function queryString(f) {
     if (f.ate) p.set('ate', f.ate);
   }
   if (f.soAlertas) p.set('soAlertas', '1');
+  if (f.antigos) p.set('antigos', '1');
   if (f.q.trim()) p.set('q', f.q.trim());
   return p.toString();
 }
@@ -275,7 +276,13 @@ function renderStats() {
 function renderVisoes() {
   $('pg-visoes').innerHTML = S.dados.opcoes.visoes
     .map((v) => `<button type="button" role="tab" class="pg-visao" data-visao="${v.id}" aria-selected="${S.f.visao === v.id}">${esc(v.rotulo)}</button>`)
-    .join('');
+    .join('') +
+    // Itens atrasados há mais de 90 dias ficam ocultos por padrão (continuam gravados): um botão traz de volta.
+    (S.dados.ocultosMuitoAtrasados > 0 || S.f.antigos
+      ? `<button type="button" class="pg-visao pg-antigos${S.f.antigos ? ' ligado' : ''}" data-antigos title="Itens em aberto com mais de 90 dias de atraso">${
+          S.f.antigos ? 'Ocultar atrasos de 90+ dias' : `${S.dados.ocultosMuitoAtrasados} com 90+ dias de atraso ocultos · Mostrar`
+        }</button>`
+      : '');
 }
 
 function montarMulti(id, titulo, opcoes) {
@@ -676,6 +683,10 @@ $('pg-thead').addEventListener('change', (e) => {
 });
 
 $('pg-visoes').addEventListener('click', (e) => {
+  if (e.target.closest('[data-antigos]')) {
+    S.f.antigos = !S.f.antigos;
+    return void carregar();
+  }
   const b = e.target.closest('[data-visao]');
   if (!b) return;
   S.f.visao = b.dataset.visao;

@@ -1,3 +1,4 @@
+import { JANELA_OCULTAR_ATRASO_DIAS } from "../constants";
 import { hojeEmSaoPaulo, somarDias } from "../prazo";
 import { derivarItem, recalcularConsumosDoItem } from "./derivar";
 import {
@@ -122,6 +123,8 @@ export interface FiltrosProgramacao {
   ate?: string;
   soAlertas?: boolean;
   q?: string;
+  /** Traz de volta os itens atrasados há mais de 90 dias (por padrão ficam ocultos). */
+  antigos?: boolean;
 }
 
 export const VISOES = [
@@ -183,6 +186,7 @@ export function filtrosDaQuery(query: Record<string, string | undefined>): Filtr
     de: query.de,
     ate: query.ate,
     soAlertas: query.soAlertas === "1",
+    antigos: query.antigos === "1",
     q: query.q,
   };
 }
@@ -356,6 +360,16 @@ export class ProgramacaoService {
     return linhas;
   }
 
+  /** Item em aberto atrasado há mais de 90 dias: represado, fica oculto por padrão (continua gravado). */
+  static muitoAtrasado(l: ItemView): boolean {
+    return l.statusPrazo.codigo === "atrasado" && (l.statusPrazo.dias ?? 0) > JANELA_OCULTAR_ATRASO_DIAS;
+  }
+
+  /** Remove da lista os itens muito atrasados, a menos que `incluirAntigos`. */
+  semMuitoAtrasados(linhas: ItemView[], incluirAntigos = false): ItemView[] {
+    return incluirAntigos ? linhas : linhas.filter((l) => !ProgramacaoService.muitoAtrasado(l));
+  }
+
   // ---------------------------------------------------------------- filtros
 
   filtrar(linhas: ItemView[], f: FiltrosProgramacao, hoje: string): ItemView[] {
@@ -458,11 +472,14 @@ export class ProgramacaoService {
 
   listar(filtros: FiltrosProgramacao, perfil: Perfil) {
     const hoje = this.hoje();
-    const todas = this.todasAsLinhas(perfil);
+    const completas = this.todasAsLinhas(perfil);
+    const todas = this.semMuitoAtrasados(completas, filtros.antigos);
     const itens = this.filtrar(todas, filtros, hoje);
     return {
       hoje,
       perfil,
+      ocultosMuitoAtrasados: completas.filter((l) => ProgramacaoService.muitoAtrasado(l)).length,
+      antigos: filtros.antigos === true,
       itens,
       totais: this.totais(itens),
       indicadores: this.indicadores(todas, hoje),
@@ -877,7 +894,7 @@ export class ProgramacaoService {
 
   exportarCsv(filtros: FiltrosProgramacao, perfil: Perfil): string {
     const hoje = this.hoje();
-    const itens = this.filtrar(this.todasAsLinhas(perfil), filtros, hoje);
+    const itens = this.filtrar(this.semMuitoAtrasados(this.todasAsLinhas(perfil), filtros.antigos), filtros, hoje);
     const cab = [
       "Pedido", "Item", "Cliente", "Telefone", "Cidade", "Rota", "Prazo vigente", "Status de prazo", "Situação", "Produto", "Tipo", "Cor",
       "TR", "Faces", "Medidas", "Metros telha", "Metros chapa", "OPs", "Data programação", "Data liberação", "Data produzida", "Data entrega",

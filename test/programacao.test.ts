@@ -627,3 +627,21 @@ test("cidades que o nome da rota cita já nascem com a rota (ex.: Sorocaba → r
   assert.equal(l.find((x) => x.numeroPedido === 2085)!.rota, null, "Ibiúna não está no mapa");
   assert.ok(repo.contarCidadesRota() >= 15);
 });
+
+test("itens atrasados há mais de 90 dias ficam ocultos por padrão (e fora dos totais); ?antigos=1 traz de volta", async () => {
+  const { rodar, servico, relogio } = montar();
+  await rodar([
+    pedido(1, "00001", 100, [item(11, 9, "1 X 1,00", "1", { dataEntrega: "01/06/2026 00:00:00" })]), // ~130 dias de atraso
+    pedido(2, "00002", 200, [item(12, 9, "1 X 1,00", "1", { dataEntrega: "01/10/2026 00:00:00" })]), // 7 dias
+  ]);
+  assert.ok(relogio.atual);
+  const padrao = servico.listar({ visao: "todos" }, "completo");
+  assert.deepEqual(padrao.itens.map((i) => i.numeroPedido), [2]);
+  assert.equal(padrao.ocultosMuitoAtrasados, 1);
+  assert.equal(padrao.indicadores.atrasados.itens, 1, "indicadores não contam o represado");
+
+  const todos = servico.listar({ visao: "todos", antigos: true }, "completo");
+  assert.equal(todos.itens.length, 2);
+  assert.equal(todos.ocultosMuitoAtrasados, 1, "o contador continua mostrando quantos há");
+  assert.equal(servico.exportarCsv({ visao: "todos" }, "completo").includes("\r\n1;"), false);
+});

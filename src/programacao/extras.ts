@@ -173,7 +173,7 @@ export class ExtrasService {
     };
   }
 
-  agenda(de: string | undefined, ate: string | undefined, perfil: Perfil) {
+  agenda(de: string | undefined, ate: string | undefined, perfil: Perfil, antigos = false) {
     const hoje = this.hoje();
     const inicio = de && isDataPlausivel(de) ? de : (somarDias(hoje, -((new Date(`${hoje}T00:00:00Z`).getUTCDay() + 6) % 7)) as string);
     const fim = ate && isDataPlausivel(ate) ? ate : (somarDias(inicio, 27) as string);
@@ -185,7 +185,9 @@ export class ExtrasService {
     const nomesFeriado = new Map(feriados.map((f) => [f.data, f.nome]));
     const util = new Set(diasUteis(inicio, fim, new Set(feriados.map((f) => f.data))));
 
-    const todas = this.servico.todasAsLinhas(perfil).filter((l) => !SITUACOES_EXCLUIDAS_DOS_TOTAIS.includes(l.situacao));
+    const todas = this.servico
+      .semMuitoAtrasados(this.servico.todasAsLinhas(perfil), antigos)
+      .filter((l) => !SITUACOES_EXCLUIDAS_DOS_TOTAIS.includes(l.situacao));
     const programadas = todas.filter((l) => l.dataProgramacao && l.dataProgramacao >= inicio && l.dataProgramacao <= fim);
 
     // Dia sem expediente só aparece se tiver item programado (para ninguém "perder" um item num sábado).
@@ -228,10 +230,10 @@ export class ExtrasService {
 
   // ---------------------------------------------------------- painel (4.4)
 
-  painel(de: string | undefined, ate: string | undefined, perfil: Perfil) {
+  painel(de: string | undefined, ate: string | undefined, perfil: Perfil, antigos = false) {
     const hoje = this.hoje();
     const todas = this.servico.todasAsLinhas(perfil).filter((l) => !SITUACOES_EXCLUIDAS_DOS_TOTAIS.includes(l.situacao));
-    const emAberto = todas.filter((l) => {
+    const emAberto = this.servico.semMuitoAtrasados(todas, antigos).filter((l) => {
       if (SITUACOES_ENCERRADAS.includes(l.situacao)) return false;
       if (de && (!l.prazoVigente || l.prazoVigente < de)) return false;
       if (ate && (!l.prazoVigente || l.prazoVigente > ate)) return false;

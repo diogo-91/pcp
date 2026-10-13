@@ -236,3 +236,6 @@
 .pg-in.sit{width:140px}
 .pg-in.data{width:120px}
 @media(max-width:760px){.pg-grp-cab{position:static;min-width:0;flex-wrap:wrap}}
+
+.pg-antigos{margin-left:auto;color:#9a5b12;background:#fff8ea;border-color:#f2dfb5}
+.pg-antigos.ligado{color:#26394e;background:#eaf0f6;border-color:#dce4ec}

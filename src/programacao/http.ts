@@ -156,14 +156,14 @@ export function registrarProgramacao(
       tratar(reply, () => {
         const q = queryTexto(request.query);
         reply.header("Cache-Control", "no-store");
-        return ex.agenda(q.de, q.ate, request.perfil);
+        return ex.agenda(q.de, q.ate, request.perfil, q.antigos === "1");
       })
     );
     app.get("/api/programacao/painel", async (request, reply) =>
       tratar(reply, () => {
         const q = queryTexto(request.query);
         reply.header("Cache-Control", "no-store");
-        return ex.painel(q.de, q.ate, request.perfil);
+        return ex.painel(q.de, q.ate, request.perfil, q.antigos === "1");
       })
     );
     app.get("/api/programacao/parafusos", async (request, reply) => {
