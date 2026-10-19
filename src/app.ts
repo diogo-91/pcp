@@ -28,6 +28,8 @@ export interface AppDeps {
   importarPlanilhaProgramacao?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown;
   /** Agenda, painel, compras de terceiros, parafusos e calculadora (módulo Programação). */
   extrasProgramacao?: import("./programacao/extras").ExtrasService;
+  /** Preenche observações vazias com as do pedido de venda da Nomus (rodada em segundo plano). */
+  observacoesNomusProgramacao?: (iniciar: boolean) => unknown;
   /** Vazio = sem autenticação (uso local). */
   accessToken: string;
   /** Segundo código, de perfil "consulta": só lê a Programação, sem telefone de clientes e sem editar. Vazio = não existe. */
@@ -87,7 +89,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   }
 
-  if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao, deps.extrasProgramacao);
+  if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao, deps.extrasProgramacao, deps.observacoesNomusProgramacao);
   else app.decorateRequest("perfil", "completo");
 
   app.get("/api/health", async () => ({ ok: true }));

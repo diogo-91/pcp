@@ -45,6 +45,15 @@ export interface ProgramacaoSyncOptions {
 const TRINTA_DIAS_MS = 30 * 24 * 60 * 60 * 1000;
 const semLog: Logger = { info() {}, warn() {} };
 const limpar = (t: string | undefined) => (t ?? "").replace(/\s+/g, " ").trim();
+/** Observação do pedido de venda: `observacoes` (ou, na falta, `observacoesInternas`), sem quebras de linha soltas. */
+export const observacaoDoPedido = (p: { observacoes?: string; observacoesInternas?: string }): string =>
+  String(p.observacoes || p.observacoesInternas || "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 4000);
+
 const hash = (valor: unknown) => createHash("sha1").update(JSON.stringify(valor)).digest("hex");
 
 export interface ResultadoPagina {
@@ -136,6 +145,39 @@ export class ProgramacaoSync implements ProgramacaoGancho {
     return r;
   }
 
+  /**
+   * Preenche a observação dos pedidos que já estão na Programação e ainda estão sem ela, buscando as observações do
+   * pedido de venda na Nomus em lotes (os antigos que a varredura de "liberados" não alcança). Não sobrescreve nada.
+   */
+  async preencherObservacoesFaltantes(): Promise<{ verificados: number; preenchidos: number }> {
+    const faltam = this.repo.pedidosSemObservacao();
+    const tamanho = this.opcoes.tamanhoLote ?? 40;
+    const pausa = this.opcoes.pausaMs ?? 1000;
+    let preenchidos = 0;
+
+    for (let i = 0; i < faltam.length; i += tamanho) {
+      const lote = faltam.slice(i, i + tamanho);
+      if (i > 0) await this.sleep(pausa);
+      const lista = await this.nomus.get<NomusPedidoLista[]>(`/pedidos?query=${lote.map((p) => `id=${p.nomusPedidoId}`).join(",")}`);
+      if (!Array.isArray(lista)) throw new Error("Resposta inesperada da Nomus: não é uma lista de pedidos.");
+
+      const porNomus = new Map(lote.map((p) => [p.nomusPedidoId, p.id]));
+      for (const p of lista) {
+        const id = typeof p.id === "number" ? porNomus.get(p.id) : undefined;
+        const texto = observacaoDoPedido(p);
+        if (id === undefined || !texto) continue;
+        const agora = this.agora().toISOString();
+        const gravou = this.repo.transacao(() => {
+          if (!this.repo.aplicarObservacaoNomus(id, texto, agora)) return false;
+          this.repo.registrarEvento({ entidade: "pedido", entidadeId: id, pedidoId: id, campo: "observacao", valorAntigo: "", valorNovo: texto.slice(0, 2000), usuario: "sync", origem: "sync", em: agora });
+          return true;
+        });
+        if (gravou) preenchidos++;
+      }
+    }
+    return { verificados: faltam.length, preenchidos };
+  }
+
   // ---- processamento
 
   async processarPagina(pedidos: NomusPedidoLista[], carregarPessoas: CarregarPessoas): Promise<ResultadoPagina> {
@@ -199,6 +241,7 @@ export class ProgramacaoSync implements ProgramacaoGancho {
       statusNomus: "liberado",
       dataEntregaOriginal: entregas[0] ?? null,
       nomusHash: "",
+      observacaoNomus: observacaoDoPedido(p),
     };
     campos.nomusHash = hash([campos.numeroPedido, campos.dataPedido, campos.clienteNome, campos.clienteTelefone, campos.cidade, campos.uf, campos.valorCentavos, campos.statusNomus]);
 
@@ -223,6 +266,15 @@ export class ProgramacaoSync implements ProgramacaoGancho {
     }
     if (!pedido) throw new Error("pedido não pôde ser gravado");
     const pedidoId = pedido.id;
+
+    // Pedido que já existia e está sem observação: traz a do pedido de venda (uma vez só; ver aplicarObservacaoNomus).
+    if (!criado && pedido.observacao === "" && campos.observacaoNomus && this.repo.aplicarObservacaoNomus(pedidoId, campos.observacaoNomus, agora)) {
+      this.repo.registrarEvento({
+        entidade: "pedido", entidadeId: pedidoId, pedidoId, campo: "observacao", valorAntigo: "", valorNovo: campos.observacaoNomus.slice(0, 2000),
+        usuario: "sync", origem: "sync", em: agora,
+      });
+      atualizado = true;
+    }
 
     // Itens: os liberados entram/atualizam; item que sumiu do pedido na Nomus é marcado (não apagado).
     const cores = this.repo.cores();

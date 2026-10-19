@@ -39,7 +39,9 @@ export function registrarProgramacao(
   /** Importação do histórico da planilha (.xlsx enviado pela tela). Opcional. */
   importarPlanilha?: (arquivo: Buffer, opcoes: { gravar: boolean; forcar: boolean }) => unknown,
   /** Agenda, painel, compras de terceiros, parafusos, feriados e calculadora. */
-  extras?: ExtrasService
+  extras?: ExtrasService,
+  /** Preenche observações vazias com as do pedido de venda da Nomus. `iniciar` dispara (em segundo plano); sempre devolve o estado. */
+  observacoesNomus?: (iniciar: boolean) => unknown
 ): void {
   app.decorateRequest("perfil", "completo");
 
@@ -253,6 +255,17 @@ export function registrarProgramacao(
         ex.removerPagamento(idDe((request.params as { id: string }).id));
         return { ok: true };
       });
+    });
+  }
+
+  if (observacoesNomus) {
+    app.post("/api/programacao/observacoes-nomus", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return reply.code(202).send(observacoesNomus(true));
+    });
+    app.get("/api/programacao/observacoes-nomus", async (request, reply) => {
+      if (!exigirCompleto(request, reply)) return;
+      return observacoesNomus(false);
     });
   }
 

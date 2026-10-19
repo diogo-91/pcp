@@ -241,6 +241,8 @@ export interface PedidoNomusCampos {
   statusNomus: string;
   dataEntregaOriginal: string | null;
   nomusHash: string;
+  /** Observações do pedido de venda na Nomus; só vira observação do PCP se ela estiver vazia. */
+  observacaoNomus: string;
 }
 
 export interface ItemNomusCampos {
@@ -421,14 +423,35 @@ export class ProgramacaoRepository {
       .prepare(
         `INSERT INTO pcp_pedido (nomus_pedido_id, numero_pedido, data_pedido, cliente_nome, cliente_telefone, cidade, uf, rota_id,
                                  data_entrega_cliente_original, valor_centavos, status_nomus, nomus_hash, nomus_sincronizado_em,
-                                 created_at, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sync')`
+                                 created_at, updated_at, updated_by, observacao, obs_nomus_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sync', ?, ?)`
       )
       .run(
         nomusPedidoId, c.numeroPedido, c.dataPedido, c.clienteNome, c.clienteTelefone,
-        c.cidade, c.uf, rotaId, c.dataEntregaOriginal, c.valorCentavos, c.statusNomus, c.nomusHash, agora, agora, agora
+        c.cidade, c.uf, rotaId, c.dataEntregaOriginal, c.valorCentavos, c.statusNomus, c.nomusHash, agora, agora, agora,
+        c.observacaoNomus, c.observacaoNomus ? agora : null
       );
     return Number(r.lastInsertRowid);
+  }
+
+  /**
+   * Observação do pedido de venda -> observação do PCP, SÓ se ela está vazia e nunca foi preenchida pela Nomus antes.
+   * Devolve true se gravou. Nunca sobrescreve texto da equipe, nem refaz o que ela apagou.
+   */
+  aplicarObservacaoNomus(id: number, texto: string, agora: string): boolean {
+    if (!texto) return false;
+    const r = this.db
+      .prepare("UPDATE pcp_pedido SET observacao = ?, obs_nomus_em = ?, updated_at = ?, updated_by = 'sync' WHERE id = ? AND observacao = '' AND obs_nomus_em IS NULL")
+      .run(texto, agora, agora, id);
+    return Number(r.changes) === 1;
+  }
+
+  /** Pedidos que ainda podem receber a observação da Nomus (vazia e nunca preenchida). */
+  pedidosSemObservacao(): Array<{ id: number; nomusPedidoId: number }> {
+    return (this.db.prepare("SELECT id, nomus_pedido_id FROM pcp_pedido WHERE observacao = '' AND obs_nomus_em IS NULL").all() as Linha[]).map((l) => ({
+      id: l.id as number,
+      nomusPedidoId: l.nomus_pedido_id as number,
+    }));
   }
 
   /**

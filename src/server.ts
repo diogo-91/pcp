@@ -60,12 +60,26 @@ const planejamento = new PlanejamentoService(repo, {
   url: config.planejamentoUrl,
   log: { info: (m) => console.log(`[planejamento] ${m}`), warn: (m) => console.warn(`[planejamento] ${m}`) },
 });
+const obsEstado: { executando: boolean; ultimo: unknown } = { executando: false, ultimo: null };
+const observacoesNomusProgramacao = (iniciar: boolean) => {
+  if (iniciar && !obsEstado.executando) {
+    obsEstado.executando = true;
+    progSync
+      .preencherObservacoesFaltantes()
+      .then((r) => { obsEstado.ultimo = { ...r, concluidoEm: new Date().toISOString() }; })
+      .catch((e) => { obsEstado.ultimo = { erro: e instanceof Error ? e.message : String(e) }; })
+      .finally(() => { obsEstado.executando = false; });
+  }
+  return { executando: obsEstado.executando, ultimo: obsEstado.ultimo };
+};
+
 const app = await buildApp({
   repo,
   sync,
   planejamento,
   programacao: progServico,
   extrasProgramacao: new ExtrasService(db, progServico, progRepo),
+  observacoesNomusProgramacao,
   sincronizarPedidoProgramacao: (id) => progSync.sincronizarPedido(id),
   importarPlanilhaProgramacao: (arquivo, o) =>
     importarDeArquivo(arquivo, { db, repo: progRepo, gravar: o.gravar, forcar: o.forcar, pastaBackup: join(dirname(config.databaseFile), "backups-operacoes") }),

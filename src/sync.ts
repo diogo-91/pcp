@@ -25,6 +25,7 @@ export interface NomusPedidoLista {
   dataEmissao?: string;
   valorTotal?: string;
   observacoes?: string;
+  observacoesInternas?: string;
   itensPedido?: NomusItemPedido[];
 }
 

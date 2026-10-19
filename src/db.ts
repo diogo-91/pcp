@@ -275,6 +275,11 @@ const MIGRATIONS: string[] = [
     contado_em  TEXT NOT NULL
   );
   `,
+  // Observação do pedido de venda da Nomus: preenche a observação do PCP quando ela está vazia, UMA vez (se a equipe
+  // apagar depois, não volta). obs_nomus_em guarda quando isso aconteceu.
+  `
+  ALTER TABLE pcp_pedido ADD COLUMN obs_nomus_em TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

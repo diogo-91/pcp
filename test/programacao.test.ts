@@ -645,3 +645,66 @@ test("itens atrasados há mais de 90 dias ficam ocultos por padrão (e fora dos 
   assert.equal(todos.ocultosMuitoAtrasados, 1, "o contador continua mostrando quantos há");
   assert.equal(servico.exportarCsv({ visao: "todos" }, "completo").includes("\r\n1;"), false);
 });
+
+// ------------------------------------------------------------------ observação do pedido de venda
+
+const comObs = (p: NomusPedidoLista, observacoes: string, internas = ""): NomusPedidoLista => ({ ...p, observacoes, observacoesInternas: internas } as NomusPedidoLista);
+
+test("pedido novo já nasce com a observação do pedido de venda da Nomus (ou a interna, na falta dela)", async () => {
+  const { rodar, repo } = montar();
+  await rodar([
+    comObs(pedido(1, "00001", 100, [item(11, 9, "1 X 1,00", "1")]), "  cliente vem retirar\r\ndia 09/10  "),
+    comObs(pedido(2, "00002", 100, [item(12, 9, "1 X 1,00", "1")]), "", "só a interna"),
+    pedido(3, "00003", 100, [item(13, 9, "1 X 1,00", "1")]),
+  ]);
+  const obs = (nomusId: number) => repo.buscarPedidoPorNomus(nomusId)!.observacao;
+  assert.equal(obs(1), "cliente vem retirar\ndia 09/10");
+  assert.equal(obs(2), "só a interna");
+  assert.equal(obs(3), "");
+});
+
+test("pedido antigo sem observação recebe a da Nomus uma vez; texto da equipe nunca é sobrescrito nem refeito se apagado", async () => {
+  const { rodar, servico, repo, todas } = montar();
+  const base = [pedido(1, "00001", 100, [item(11, 9, "1 X 1,00", "1")]), pedido(2, "00002", 100, [item(12, 9, "1 X 1,00", "1")])];
+  await rodar(base); // entram sem observação na Nomus
+  const idPedido = (n: number) => repo.buscarPedidoPorNomus(n)!.id;
+  servico.editarPedido(idPedido(2), { observacao: "texto do PCP" }, "Ana");
+
+  // a Nomus passa a ter observação nos dois
+  const r = await rodar([comObs(base[0], "obs Nomus 1"), comObs(base[1], "obs Nomus 2")]);
+  assert.equal(repo.buscarPedidoPorNomus(1)!.observacao, "obs Nomus 1", "vazia: preenchida");
+  assert.equal(repo.buscarPedidoPorNomus(2)!.observacao, "texto do PCP", "da equipe: preservada");
+  assert.equal(r.atualizados, 1);
+  assert.ok(repo.eventosDoPedido(idPedido(1)).some((e) => e.campo === "observacao" && e.origem === "sync"));
+
+  // a equipe apaga: não volta
+  servico.editarPedido(idPedido(1), { observacao: "" }, "Ana");
+  await rodar([comObs(base[0], "obs Nomus 1"), comObs(base[1], "obs Nomus 2")]);
+  assert.equal(repo.buscarPedidoPorNomus(1)!.observacao, "");
+  assert.ok(todas().length > 0);
+});
+
+test("preencher os pedidos antigos em lote: só os vazios, em lotes, sem sobrescrever", async () => {
+  const { rodar, sync, nomus, servico, repo } = montar();
+  const pedidos = [1, 2, 3].map((n) => pedido(n, `0000${n}`, 100, [item(10 + n, 9, "1 X 1,00", "1")]));
+  await rodar(pedidos);
+  servico.editarPedido(repo.buscarPedidoPorNomus(3)!.id, { observacao: "da equipe" }, "Ana");
+
+  const original = nomus.get.bind(nomus);
+  const consultas: string[] = [];
+  nomus.get = async <T,>(c: string): Promise<T> => {
+    if (c.startsWith("/pedidos?query=")) {
+      consultas.push(c);
+      return [comObs(pedidos[0], "obs A"), comObs(pedidos[1], ""), comObs(pedidos[2], "obs C")] as T;
+    }
+    return original<T>(c);
+  };
+
+  const r = await sync.preencherObservacoesFaltantes();
+  assert.deepEqual(r, { verificados: 2, preenchidos: 1 }, "o pedido 3 (já com texto) nem é consultado; o 2 não tem observação na Nomus");
+  assert.equal(consultas.length, 1);
+  assert.ok(!consultas[0].includes("id=3"));
+  assert.equal(repo.buscarPedidoPorNomus(1)!.observacao, "obs A");
+  assert.equal(repo.buscarPedidoPorNomus(3)!.observacao, "da equipe");
+  assert.deepEqual(await sync.preencherObservacoesFaltantes(), { verificados: 1, preenchidos: 0 }, "segunda rodada não repete o que já foi preenchido");
+});
