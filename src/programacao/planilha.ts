@@ -223,7 +223,17 @@ export function importarPlanilha(opcoes: {
     }
     const negociadaEscolhida = [...negociadas].sort().at(-1) ?? null;
     if (negociadas.size > 1) notasPedido.push(`prazos negociados diferentes entre as linhas (${[...negociadas].join(", ")}); usado o mais recente`);
-    const observacao = obs.join(" | ").slice(0, 4000);
+    const daPlanilha = obs.join(" | ");
+    // Observação que veio da Nomus não é substituída pela da planilha: os dois textos ficam juntos (a da planilha primeiro).
+    // Se um já contém o outro, nada muda (a importação repetida não empilha texto).
+    const atualObs = pedido.observacao;
+    const observacao = (
+      pedido.obsNomusEm && atualObs && daPlanilha && !atualObs.includes(daPlanilha) && !daPlanilha.includes(atualObs)
+        ? `${daPlanilha} | ${atualObs}`
+        : pedido.obsNomusEm && atualObs && atualObs.includes(daPlanilha)
+          ? atualObs
+          : daPlanilha
+    ).slice(0, 4000);
     const rotaPlanilha = rotas.size === 1 ? [...rotas][0] : null;
     if (rotas.size > 1) notasPedido.push(`rotas diferentes entre as linhas (${[...rotas].join(", ")}): rota não importada`);
 

@@ -31,6 +31,8 @@ export interface PedidoProg {
   valorCentavos: number | null;
   statusNomus: string;
   observacao: string;
+  /** Quando a observação veio do pedido de venda da Nomus (null = texto da equipe ou vazio). */
+  obsNomusEm: string | null;
   nomusHash: string;
   createdAt: string;
   updatedAt: string;
@@ -145,6 +147,7 @@ const paraPedido = (l: Linha): PedidoProg => ({
   valorCentavos: (l.valor_centavos as number | null) ?? null,
   statusNomus: l.status_nomus as string,
   observacao: l.observacao as string,
+  obsNomusEm: (l.obs_nomus_em as string | null) ?? null,
   nomusHash: l.nomus_hash as string,
   createdAt: l.created_at as string,
   updatedAt: l.updated_at as string,

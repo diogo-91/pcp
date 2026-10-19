@@ -278,3 +278,24 @@ test("API: upload do .xlsx simula, depois grava com backup; perfil de consulta n
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("observação que veio da Nomus não é substituída pela da planilha: os dois textos ficam juntos, sem empilhar", async () => {
+  const { repo, db } = await montar();
+  const ped = repo.buscarPedidoPorNomus(1002)!;
+  repo.aplicarObservacaoNomus(ped.id, "obs da Nomus", "2026-10-08T12:00:00.000Z");
+  const { base } = baseDe([{ A: 1822, H: "Programado", I: "Sanduiche", BY: "obs da planilha" }]);
+
+  importarPlanilha({ repo, base, gravar: true });
+  assert.equal(repo.buscarPedidoPorNomus(1002)!.observacao, "obs da planilha | obs da Nomus");
+  const eventos = contar(db, "pcp_evento");
+  importarPlanilha({ repo, base, gravar: true });
+  assert.equal(repo.buscarPedidoPorNomus(1002)!.observacao, "obs da planilha | obs da Nomus", "segunda vez não empilha");
+  assert.equal(contar(db, "pcp_evento"), eventos);
+
+  // observação escrita pela equipe continua sendo substituída pela da planilha (comportamento anterior)
+  const outro = repo.buscarPedidoPorNomus(1001)!;
+  repo.atualizarPedidoPcp(outro.id, { observacao: "antiga" }, "importacao", "2026-10-08T12:00:00.000Z");
+  const { base: b2 } = baseDe([{ A: 648, H: "Programado", I: "Sanduiche", BY: "nova" }, { A: 648, H: "Programar", I: "Simples" }]);
+  importarPlanilha({ repo, base: b2, gravar: true });
+  assert.equal(repo.buscarPedidoPorNomus(1001)!.observacao, "nova");
+});
