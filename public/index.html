@@ -154,10 +154,27 @@
             <span><strong>Pedido, cliente e telefone</strong> vêm da Nomus (somente leitura) · o prazo nasce com o da Nomus e pode ser ajustado aqui, assim como o restante · o <strong>prazo de produção</strong> vem do Planejamento (somente leitura)</span>
             <em>Role lateralmente para visualizar todas as colunas ↔</em>
           </div>
+          <div class="massa" id="massa" hidden>
+            <div class="massa-topo"><strong id="massa-n">0 selecionados</strong>
+              <button type="button" class="btn-sync" id="massa-todos">Selecionar todos os listados</button>
+              <button type="button" class="btn-sync" id="massa-limpar">Limpar seleção</button></div>
+            <p class="massa-dica">Preencha só o que quer mudar: campos vazios não alteram nada. Vale para todos os selecionados e dá para desfazer logo depois.</p>
+            <div class="massa-campos">
+              <label>Status<select id="massa-status"><option value="">— não alterar —</option></select></label>
+              <label>Atendimento<select id="massa-atendimento"><option value="">— não alterar —</option></select></label>
+              <label>Responsável<input id="massa-responsavel" placeholder="não alterar" maxlength="100"></label>
+              <label>Prazo de entrega<input type="date" id="massa-prazo"></label>
+              <label>ou somar dias ao prazo<input type="number" id="massa-somar" step="1" min="-365" max="365" placeholder="ex.: 7 ou -3"></label>
+              <label>Plano de ação<input id="massa-acao" placeholder="não alterar" maxlength="2000"></label>
+              <label>Prazo da ação<input type="date" id="massa-prazo-acao"></label>
+              <label>Situação da ação<select id="massa-acao-status"><option value="">— não alterar —</option></select></label>
+            </div>
+            <button type="button" class="pg-btn" id="massa-aplicar">Aplicar aos selecionados</button>
+          </div>
           <div class="tablewrap">
             <table>
               <thead><tr>
-                <th>Pedido</th><th>Cliente</th><th>Telefone</th><th>Status</th><th title="Data em que a ordem de produção está agendada no Planejamento (somente leitura)">Prazo de produção</th><th>Prazo de entrega</th><th>Alerta</th>
+                <th><label class="selcell"><input type="checkbox" id="sel-todos" title="Selecionar todos os pedidos listados"> Pedido</label></th><th>Cliente</th><th>Telefone</th><th>Status</th><th title="Data em que a ordem de produção está agendada no Planejamento (somente leitura)">Prazo de produção</th><th>Prazo de entrega</th><th>Alerta</th>
                 <th>Atendimento</th><th>Responsável</th><th>Plano de ação</th><th>Prazo da ação</th><th>Situação da ação</th>
               </tr></thead>
               <tbody id="linhas"></tbody>

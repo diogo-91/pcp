@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ACAO_STATUS_PADRAO, STATUS_PCP_FINAIS, STATUS_PCP_PADRAO } from "./constants";
 import { inTransaction } from "./db";
+import { somarDias } from "./prazo";
 import type { HistoricoRow, ItemProducao, PedidoNomus, PedidoRow, SyncRun, TratativaPatch } from "./types";
 
 export interface PessoaCache {
@@ -253,6 +254,35 @@ export class PcpRepository {
     }
 
     return this.buscar(nomusId);
+  }
+
+  /**
+   * Edição em massa, TUDO OU NADA: se algum pedido não existir, nada é gravado. `somarDias` desloca o prazo de entrega de
+   * cada pedido (pedido sem prazo é pulado e contado em `semPrazo`). Devolve as linhas já atualizadas.
+   */
+  atualizarEmLote(
+    itens: Array<{ nomusId: number; patch: TratativaPatch }>,
+    deslocamentoDias: number | null,
+    agora: string
+  ): { pedidos: PedidoRow[]; semPrazo: number } | { faltando: number } {
+    return inTransaction(this.db, () => {
+      for (const i of itens) if (!this.buscar(i.nomusId)) return { faltando: i.nomusId };
+
+      let semPrazo = 0;
+      const pedidos: PedidoRow[] = [];
+      for (const i of itens) {
+        const patch: TratativaPatch = { ...i.patch };
+        if (deslocamentoDias !== null) {
+          const atual = this.buscar(i.nomusId)?.prazoEntrega ?? null;
+          const novo = atual ? somarDias(atual, deslocamentoDias) : null;
+          if (novo) patch.prazoEntrega = novo;
+          else semPrazo++;
+        }
+        const r = this.atualizarTratativa(i.nomusId, patch, agora);
+        if (r) pedidos.push(r);
+      }
+      return { pedidos, semPrazo };
+    });
   }
 
   // ---- cache de clientes (pessoas da Nomus) ----

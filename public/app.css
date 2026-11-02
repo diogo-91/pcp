@@ -80,3 +80,16 @@
 .tablewrap th:nth-child(12),.tablewrap td:nth-child(12){min-width:174px}
 .cellro.prod{font-weight:700;font-variant-numeric:tabular-nums;cursor:help}
 .cellro.prod.depois{color:#bb4153}
+
+/* Edição em massa da Tabela de pedidos */
+.selcell{display:flex;align-items:center;gap:8px;cursor:pointer}
+.selcell input{width:16px;height:16px;flex:none;accent-color:#e0ab28}
+.tablewrap tbody tr.sel td{background:#fff6d6}
+.massa{margin:0 16px 12px;padding:12px 14px;background:#fff8e1;border:1px solid #f2dfb5;border-radius:12px}
+.massa[hidden]{display:none}
+.massa-topo{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.massa-topo strong{font-size:13px;color:#7a4e0a;margin-right:6px}
+.massa-dica{margin:6px 0 10px;font-size:12px;color:#7d5a1a}
+.massa-campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:12px}
+.massa-campos label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6c7d8f}
+.massa-campos select,.massa-campos input{border:1px solid #dce4ec;border-radius:8px;padding:8px 9px;font-size:12px;background:#fff;color:#26394e;text-transform:none;letter-spacing:0;font-weight:500}

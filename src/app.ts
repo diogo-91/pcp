@@ -13,6 +13,7 @@ import { hojeEmSaoPaulo } from "./prazo";
 import { consultarPedidoPublico } from "./publico";
 import type { PcpRepository } from "./repository";
 import type { SyncService } from "./sync";
+import type { TratativaPatch } from "./types";
 import { validarPatch } from "./validation";
 
 export interface AppDeps {
@@ -155,6 +156,61 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       sync: sync.status(),
       planejamento: planejamento?.status() ?? { configurado: false, ultimaTentativa: null, ultimoSucesso: null, erro: null, pedidosProgramados: 0 },
     };
+  });
+
+  /**
+   * Edição em massa (tudo ou nada). Dois formatos:
+   *  - { ids: [..], patch: {..}, somarDias?: n }  -> o mesmo patch em todos (e/ou desloca o prazo de entrega de cada um);
+   *  - { itens: [{ id, patch }] }                  -> um patch por pedido (é o que o "Desfazer" usa).
+   */
+  app.post("/api/pedidos/lote", async (request, reply) => {
+    const corpo = request.body as Record<string, unknown> | null;
+    if (typeof corpo !== "object" || corpo === null || Array.isArray(corpo)) return reply.code(400).send({ erro: "O corpo deve ser um objeto JSON." });
+
+    const idValido = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v > 0;
+    const itens: Array<{ nomusId: number; patch: TratativaPatch }> = [];
+    let deslocamento: number | null = null;
+
+    if (corpo.somarDias !== undefined) {
+      const d = corpo.somarDias;
+      if (typeof d !== "number" || !Number.isInteger(d) || d === 0 || Math.abs(d) > 365) {
+        return reply.code(400).send({ erro: "somarDias deve ser um número inteiro, diferente de zero, entre -365 e 365." });
+      }
+      deslocamento = d;
+    }
+
+    if (Array.isArray(corpo.itens)) {
+      if (corpo.itens.length === 0 || corpo.itens.length > 1000) return reply.code(400).send({ erro: "Informe de 1 a 1000 pedidos." });
+      for (const x of corpo.itens as Array<{ id?: unknown; patch?: unknown }>) {
+        if (!idValido(x?.id)) return reply.code(400).send({ erro: "Id de pedido inválido." });
+        const v = validarPatch(x.patch);
+        if (!v.ok) return reply.code(400).send({ erro: `Pedido ${x.id}: ${v.erro}` });
+        itens.push({ nomusId: x.id, patch: v.patch });
+      }
+    } else {
+      const ids = corpo.ids;
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > 1000 || !ids.every(idValido)) {
+        return reply.code(400).send({ erro: "Informe de 1 a 1000 ids de pedido." });
+      }
+      let patch: TratativaPatch = {};
+      if (corpo.patch !== undefined) {
+        const v = validarPatch(corpo.patch);
+        if (!v.ok) return reply.code(400).send({ erro: v.erro });
+        patch = v.patch;
+      } else if (deslocamento === null) {
+        return reply.code(400).send({ erro: "Informe o que alterar (patch ou somarDias)." });
+      }
+      if (deslocamento !== null && "prazoEntrega" in patch) {
+        return reply.code(400).send({ erro: "Use prazoEntrega OU somarDias, não os dois." });
+      }
+      for (const id of new Set(ids as number[])) itens.push({ nomusId: id, patch });
+    }
+
+    const r = repo.atualizarEmLote(itens, deslocamento, agora().toISOString());
+    if ("faltando" in r) return reply.code(404).send({ erro: `Pedido ${r.faltando} não encontrado: nada foi alterado.` });
+
+    const hoje = hojeEmSaoPaulo(agora());
+    return { atualizados: r.pedidos.length, semPrazo: r.semPrazo, pedidos: r.pedidos.map((row) => montarPedido(row, hoje)) };
   });
 
   app.patch("/api/pedidos/:id", async (request, reply) => {

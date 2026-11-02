@@ -26,6 +26,7 @@ const estado = {
   opcoes: { statusPcp: [], atendimento: [], acaoStatus: [], finais: [] },
   sync: { executando: false, ultima: null, ultimaComSucesso: null },
   hoje: '',
+  sel: new Set(), // pedidos marcados para edição em massa
   filtro: 'todos',
   busca: '',
   status: 'todos',
@@ -195,8 +196,8 @@ function producaoHtml(p) {
 }
 
 function linhaHtml(p) {
-  return `<tr data-id="${p.nomusId}">
-    <td><span class="cellro"><strong>${esc(p.codigoPedido)}</strong></span></td>
+  return `<tr data-id="${p.nomusId}"${estado.sel.has(p.nomusId) ? ' class="sel"' : ''}>
+    <td><label class="selcell cellro"><input type="checkbox" data-sel="${p.nomusId}" aria-label="Selecionar o pedido ${esc(p.codigoPedido)}"${estado.sel.has(p.nomusId) ? ' checked' : ''}><strong>${esc(p.codigoPedido)}</strong></label></td>
     <td>${somenteLeitura(p.clienteNome, 'Sem nome')}</td>
     <td>${somenteLeitura(p.telefone, 'Sem telefone')}</td>
     <td>${selectHtml(p, 'statusPcp', estado.opcoes.statusPcp, COR_STATUS, 'Status')}</td>
@@ -257,6 +258,7 @@ function renderTabela() {
 
   wrap.scrollTop = scrollTop;
   wrap.scrollLeft = scrollLeft;
+  renderMassa(lista);
 }
 
 function renderTudo() {
@@ -500,6 +502,114 @@ $('btn-sync').addEventListener('click', async () => {
     acompanharSync();
   } catch (erro) {
     aviso(`Não foi possível iniciar a sincronização: ${erro.message}`);
+  }
+});
+
+// ---------------------------------------------------------------- edição em massa
+function renderMassa(lista = pedidosVisiveis()) {
+  // Pedido que saiu da tela (finalizado, ou fora do filtro de antigos) deixa a seleção.
+  for (const id of [...estado.sel]) if (!estado.pedidos.some((p) => p.nomusId === id)) estado.sel.delete(id);
+
+  $('massa').hidden = estado.sel.size === 0;
+  $('massa-n').textContent = `${estado.sel.size.toLocaleString('pt-BR')} ${estado.sel.size === 1 ? 'selecionado' : 'selecionados'}`;
+  $('massa-todos').textContent = `Selecionar todos os ${lista.length.toLocaleString('pt-BR')} listados`;
+
+  const todos = $('sel-todos');
+  const marcados = lista.filter((p) => estado.sel.has(p.nomusId)).length;
+  todos.checked = lista.length > 0 && marcados === lista.length;
+  todos.indeterminate = marcados > 0 && marcados < lista.length;
+
+  const preencher = (id, opcoes) => {
+    const el = $(id);
+    if (el.options.length <= 1) el.insertAdjacentHTML('beforeend', opcoes.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join(''));
+  };
+  preencher('massa-status', estado.opcoes.statusPcp);
+  preencher('massa-atendimento', estado.opcoes.atendimento);
+  preencher('massa-acao-status', estado.opcoes.acaoStatus);
+}
+
+function marcar(ids, ligado) {
+  for (const id of ids) ligado ? estado.sel.add(id) : estado.sel.delete(id);
+  renderTabela();
+}
+
+$('linhas').addEventListener('change', (e) => {
+  const el = e.target.closest('[data-sel]');
+  if (!el) return;
+  const id = Number(el.dataset.sel);
+  el.checked ? estado.sel.add(id) : estado.sel.delete(id);
+  el.closest('tr').classList.toggle('sel', el.checked);
+  renderMassa();
+});
+$('sel-todos').addEventListener('change', (e) => marcar(pedidosVisiveis().map((p) => p.nomusId), e.target.checked));
+$('massa-todos').addEventListener('click', () => marcar(pedidosVisiveis().map((p) => p.nomusId), true));
+$('massa-limpar').addEventListener('click', () => marcar([...estado.sel], false));
+
+const CAMPOS_MASSA = [
+  ['statusPcp', 'massa-status', 'Status'],
+  ['atendimento', 'massa-atendimento', 'Atendimento'],
+  ['responsavel', 'massa-responsavel', 'Responsável'],
+  ['prazoEntrega', 'massa-prazo', 'Prazo de entrega'],
+  ['acao', 'massa-acao', 'Plano de ação'],
+  ['prazoAcao', 'massa-prazo-acao', 'Prazo da ação'],
+  ['acaoStatus', 'massa-acao-status', 'Situação da ação'],
+];
+
+$('massa-aplicar').addEventListener('click', async () => {
+  const patch = {};
+  const resumo = [];
+  for (const [campo, id, rotulo] of CAMPOS_MASSA) {
+    const v = $(id).value.trim();
+    if (v !== '') { patch[campo] = v; resumo.push(`${rotulo}: ${v}`); }
+  }
+  const somar = $('massa-somar').value.trim();
+  const body = { ids: [...estado.sel] };
+  if (somar !== '') {
+    if ('prazoEntrega' in patch) return aviso('Use o prazo de entrega OU somar dias, não os dois.');
+    body.somarDias = Number(somar);
+    resumo.push(`Prazo de entrega ${body.somarDias > 0 ? '+' : ''}${body.somarDias} dia(s)`);
+  }
+  if (resumo.length === 0) return aviso('Preencha ao menos um campo para aplicar.');
+  if (Object.keys(patch).length) body.patch = patch;
+  if (!confirm(`Aplicar a ${estado.sel.size} pedido(s)?\n\n${resumo.join('\n')}`)) return;
+
+  // Guarda o que cada pedido tinha, para o "Desfazer".
+  const campos = Object.keys(patch).concat(body.somarDias ? ['prazoEntrega'] : []);
+  const antes = [...estado.sel].map((id) => {
+    const p = estado.pedidos.find((x) => x.nomusId === id);
+    return { id, patch: Object.fromEntries(campos.map((c) => [c, p?.[c] ?? (c === 'statusPcp' || c === 'acaoStatus' ? undefined : '')]).filter(([, v]) => v !== undefined)) };
+  });
+
+  const botao = $('massa-aplicar');
+  botao.disabled = true;
+  try {
+    aviso('');
+    const r = await api('/api/pedidos/lote', { method: 'POST', body: JSON.stringify(body) });
+    for (const novo of r.pedidos) {
+      const atual = estado.pedidos.find((x) => x.nomusId === novo.nomusId);
+      if (atual) Object.assign(atual, novo);
+    }
+    for (const [, id] of CAMPOS_MASSA) $(id).value = '';
+    $('massa-somar').value = '';
+    estado.sel.clear();
+    await carregar({ silencioso: true });
+    mensagemSalvo(`${r.atualizados} pedido(s) atualizados.`);
+    mostrarToast(
+      `${r.atualizados} pedido(s) atualizados${r.semPrazo ? ` (${r.semPrazo} sem prazo foram pulados no deslocamento)` : ''}.`,
+      async () => {
+        try {
+          await api('/api/pedidos/lote', { method: 'POST', body: JSON.stringify({ itens: antes.filter((a) => Object.keys(a.patch).length) }) });
+          await carregar({ silencioso: true });
+          mensagemSalvo('Alteração em massa desfeita.');
+        } catch (erro) {
+          aviso(`Não foi possível desfazer: ${erro.message}`);
+        }
+      }
+    );
+  } catch (erro) {
+    aviso(`Nada foi alterado: ${erro.message}`); // a edição em massa é tudo ou nada
+  } finally {
+    botao.disabled = false;
   }
 });
 
