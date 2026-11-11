@@ -19,7 +19,7 @@ const TABELAS = {
     vazio: 'Nenhuma devolução cadastrada.',
     campos: [
       { k: 'formaPagamento', rotulo: 'Forma de pagamento', tipo: 'text', max: 300 },
-      { k: 'valor', rotulo: 'Valor', tipo: 'number' },
+      { k: 'valor', rotulo: 'Valor da devolução', tipo: 'number' },
     ],
   },
   defeitos: {
