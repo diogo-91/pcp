@@ -19,9 +19,9 @@ class NomusFalso implements NomusLeitor {
       const q = decodeURIComponent(caminho);
       if (q.includes("PD 01744")) {
         return [{ id: 1756, codigoPedido: "PD 01744", idPessoaCliente: 7994, idFormaPagamento: 13, valorTotal: "5.587,20", dataEntregaPadrao: "25/09/2026 00:00:00",
-          itensPedido: [{ dataEntrega: "08/10/2026 00:00:00" }], parcelas: [{ idFormaPagamento: 13 }, { idFormaPagamento: 3 }, { idFormaPagamento: 13 }] }] as T;
+          itensPedido: [{ dataEntrega: "08/10/2026 00:00:00" }], parcelas: [{ idFormaPagamento: 13, observacao: "entrada ", valorParcela: "726" }, { idFormaPagamento: 3, observacao: "entrega", valorParcela: "4.861,20" }] }] as T;
       }
-      if (q.includes("PD 00500")) return [{ id: 900, codigoPedido: "PD 00500", idPessoaCliente: 1, idFormaPagamento: 3, valorTotal: "100,00" }] as T;
+      if (q.includes("PD 00500")) return [{ id: 900, codigoPedido: "PD 00500", idPessoaCliente: 1, idFormaPagamento: 3, valorTotal: "100,00", parcelas: [{ idFormaPagamento: 3, observacao: "", valorParcela: "100" }] }] as T;
       return [] as T;
     }
     if (caminho.startsWith("/pessoas/")) return { nome: caminho.endsWith("/7994") ? "Paulo de Lima Costa" : "Cliente Antigo" } as T;
@@ -29,7 +29,7 @@ class NomusFalso implements NomusLeitor {
   }
 }
 
-async function montar(accessToken = "", consulta = "") {
+async function montar(accessToken = "", consulta = "", tempoLimiteMs = 25_000) {
   const db = openDatabase(":memory:");
   const repo = new PcpRepository(db);
   repo.inserirNovos(
@@ -40,10 +40,10 @@ async function montar(accessToken = "", consulta = "") {
     AGORA.toISOString()
   );
   const nomus = new NomusFalso();
-  const servico = new ProblematicosService(db, nomus, () => AGORA);
+  const servico = new ProblematicosService(db, nomus, () => AGORA, tempoLimiteMs);
   const sync = new SyncService({ get: async () => [] as never }, repo, { statusLiberado: 2 });
   const app = await buildApp({ repo, sync, accessToken, accessTokenConsulta: consulta, problematicos: servico, agora: () => AGORA });
-  return { app, nomus, servico };
+  return { app, nomus, servico, db };
 }
 
 test("busca de pedido por número (começa com) e por nome do cliente", async () => {
@@ -67,7 +67,7 @@ test("detalhe do pedido traz valor e forma(s) de pagamento do pedido de venda", 
   const { app } = await montar();
   const d = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1744" })).json() as Record<string, unknown>;
   assert.equal(d.valor, 5587.2);
-  assert.equal(d.formaPagamento, "Pix + Cartão de Crédito", "formas das parcelas, sem repetir");
+  assert.equal(d.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20", "entrada e entrega, cada uma com a forma e o valor");
   assert.equal(d.cliente, "Paulo de Lima Costa");
   assert.equal(d.prazoEntrega, "2026-10-08");
   assert.equal((await app.inject({ method: "GET", url: "/api/problematicos/pedidos/99999" })).statusCode, 404);
@@ -104,7 +104,7 @@ test("tabela 2: devolução se preenche sozinha (forma de pagamento e valor) ao 
   const r = await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1744 } });
   assert.equal(r.statusCode, 201);
   const d = (r.json() as { devolucoes: Array<Record<string, unknown>> }).devolucoes[0];
-  assert.equal(d.formaPagamento, "Pix + Cartão de Crédito");
+  assert.equal(d.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20");
   assert.equal(d.valor, 5587.2);
   assert.equal(d.cliente, "Paulo de Lima Costa");
 
@@ -147,4 +147,54 @@ test("perfil de consulta não acessa os registros; sem código a API recusa", as
   assert.equal((await app.inject({ method: "GET", url: "/api/problematicos" })).statusCode, 401);
   assert.equal((await app.inject({ method: "GET", url: "/api/problematicos", headers: { "x-pcp-token": "codigo-consulta" } })).statusCode, 403);
   assert.equal((await app.inject({ method: "GET", url: "/api/problematicos", headers: { "x-pcp-token": "codigo-completo" } })).statusCode, 200);
+});
+
+test("Nomus lenta: não trava; usa a última cópia (ou o valor do PCP) e avisa; a consulta lenta alimenta a cópia", async () => {
+  const { app, nomus, servico } = await montar("", "", 50);
+  const original = nomus.get.bind(nomus);
+  let liberar!: () => void;
+  const trava = new Promise<void>((r) => (liberar = r));
+  nomus.get = async <T,>(c: string): Promise<T> => {
+    if (c.startsWith("/pedidos?query=") || c === "/formasPagamento") await trava; // a Nomus "demora"
+    return original<T>(c);
+  };
+
+  const lento = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1744" })).json() as Record<string, unknown>;
+  assert.match(String(lento.aviso), /Nomus não respondeu/);
+  assert.equal(lento.cliente, "Paulo de Lima Costa", "o cliente vem do PCP");
+  assert.equal(lento.formaPagamento, "");
+  assert.equal(lento.valor, null);
+
+  liberar(); // a consulta que estourou o tempo termina em segundo plano e grava a cópia
+  await new Promise((r) => setTimeout(r, 100));
+
+  // agora a Nomus cai de vez: a tela ainda recebe o último valor e a forma de pagamento
+  nomus.get = async () => { throw new Error("Nomus fora do ar"); };
+  const copia = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1744" })).json() as Record<string, unknown>;
+  assert.equal(copia.valor, 5587.2);
+  assert.equal(copia.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20");
+  assert.match(String(copia.aviso), /última consulta/);
+  assert.ok(servico);
+});
+
+test("forma de pagamento: uma parcela só mostra o nome; várias mostram entrada/entrega com valores; rótulo livre vira título", async () => {
+  const { app, nomus } = await montar();
+  const unica = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/500" })).json() as Record<string, unknown>;
+  assert.equal(unica.formaPagamento, "Cartão de Crédito", "uma parcela: só o nome da forma");
+
+  const original = nomus.get.bind(nomus);
+  nomus.get = async <T,>(c: string): Promise<T> => {
+    if (c.startsWith("/pedidos?query=") && decodeURIComponent(c).includes("PD 01750")) {
+      return [{ id: 1760, codigoPedido: "PD 01750", idPessoaCliente: 1, idFormaPagamento: 13, valorTotal: "3.000,00",
+        parcelas: [{ idFormaPagamento: 13, observacao: "Sinal 30%", valorParcela: "900" }, { idFormaPagamento: 13, observacao: "", valorParcela: "" }] }] as T;
+    }
+    return original<T>(c);
+  };
+  const livre = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1750" })).json() as Record<string, unknown>;
+  assert.equal(livre.formaPagamento, "Sinal 30%: Pix R$ 900,00 + Parcela 2: Pix");
+
+  // texto longo (várias parcelas) cabe no registro da devolução
+  const longa = "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20 + Parcela 3: Boleto Bancário R$ 1.000,00 + Parcela 4: Cheque R$ 500,00";
+  const r = await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1744, formaPagamento: longa, valor: 10 } });
+  assert.equal(r.statusCode, 201);
 });

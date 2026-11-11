@@ -315,6 +315,17 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_pcp_devolucao_pedido ON pcp_devolucao (numero_pedido);
   CREATE INDEX IF NOT EXISTS idx_pcp_defeito_pedido ON pcp_defeito (numero_pedido);
   `,
+  // Última consulta de valor e forma de pagamento de um pedido na Nomus: se a Nomus demorar ou cair, a tela ainda preenche.
+  `
+  CREATE TABLE IF NOT EXISTS pcp_pedido_financeiro (
+    numero          INTEGER PRIMARY KEY,
+    cliente_nome    TEXT NOT NULL DEFAULT '',
+    valor_centavos  INTEGER,
+    forma_pagamento TEXT NOT NULL DEFAULT '',
+    prazo_entrega   TEXT,
+    atualizado_em   TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

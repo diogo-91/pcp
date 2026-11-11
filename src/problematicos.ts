@@ -32,7 +32,7 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
   devolucoes: {
     tabela: "pcp_devolucao",
     campos: [
-      { chave: "formaPagamento", coluna: "forma_pagamento", tipo: "texto", max: 80 },
+      { chave: "formaPagamento", coluna: "forma_pagamento", tipo: "texto", max: 300 },
       { chave: "valor", coluna: "valor_centavos", tipo: "dinheiro" },
     ],
   },
@@ -54,6 +54,8 @@ export interface PedidoEncontrado {
 }
 
 export interface DetalheDoPedido extends PedidoEncontrado {
+  /** Preenchido quando a Nomus não respondeu a tempo: explica o que está faltando ou desatualizado. */
+  aviso?: string;
   /** Valor total do pedido de venda, em reais. */
   valor: number | null;
   /** Forma(s) de pagamento do pedido de venda, ex.: "Pix" ou "Pix + Cartão de Crédito". */
@@ -69,7 +71,30 @@ interface NomusPedido {
   valorTotal?: string;
   dataEntregaPadrao?: string;
   itensPedido?: Array<{ dataEntrega?: string }>;
-  parcelas?: Array<{ idFormaPagamento?: number }>;
+  parcelas?: Array<{ idFormaPagamento?: number; observacao?: string; valorParcela?: string }>;
+}
+
+const brl = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\u00a0/g, " ");
+
+/**
+ * Forma(s) de pagamento do pedido de venda. Com mais de uma parcela mostra cada uma, com o rótulo que a Nomus guarda
+ * (entrada, entrega…) e o valor: "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20".
+ * Com uma parcela só (ou sem parcelas) mostra apenas o nome da forma, ex.: "Pix".
+ */
+export function descreverPagamento(p: NomusPedido, nomes: Map<number, string>): string {
+  const parcelas = p.parcelas ?? [];
+  const nome = (id: number | undefined) => (typeof id === "number" ? (nomes.get(id) ?? "") : "");
+
+  if (parcelas.length <= 1) return nome(parcelas[0]?.idFormaPagamento ?? p.idFormaPagamento);
+
+  const partes = parcelas.map((x, i) => {
+    const forma = nome(x.idFormaPagamento ?? p.idFormaPagamento) || "forma não informada";
+    const rotulo = limpar(x.observacao).toLowerCase();
+    const titulo = rotulo.startsWith("entrada") ? "Entrada" : rotulo.startsWith("entrega") ? "Entrega" : rotulo ? rotulo.charAt(0).toUpperCase() + rotulo.slice(1, 24) : `Parcela ${i + 1}`;
+    const centavos = reaisParaCentavos(x.valorParcela);
+    return `${titulo}: ${forma}${centavos === null ? "" : ` ${brl(centavos)}`}`;
+  });
+  return partes.join(" + ");
 }
 
 const codigoDoPedido = (numero: number) => `PD ${String(numero).padStart(5, "0")}`;
@@ -86,7 +111,9 @@ export class ProblematicosService {
   constructor(
     private readonly db: DatabaseSync,
     private readonly nomus: NomusLeitor | null,
-    private readonly agora: () => Date = () => new Date()
+    private readonly agora: () => Date = () => new Date(),
+    /** Quanto esperar a Nomus ao preencher o formulário (ela limita as consultas e pode demorar). */
+    private readonly tempoLimiteMs = 25_000
   ) {}
 
   // ------------------------------------------------------------ busca e preenchimento automático
@@ -135,8 +162,7 @@ export class ProblematicosService {
       cliente = limpar(pessoa?.nome);
     }
     const nomes = await this.nomesDasFormas().catch(() => new Map<number, string>());
-    const ids = [...new Set((p.parcelas ?? []).map((x) => x.idFormaPagamento).filter((v): v is number => typeof v === "number"))];
-    if (ids.length === 0 && typeof p.idFormaPagamento === "number") ids.push(p.idFormaPagamento);
+    const formaPagamento = descreverPagamento(p, nomes);
     const datas = (p.itensPedido ?? []).map((i) => dataBr(i.dataEntrega)).filter((d): d is string => d !== null).sort();
     const centavos = reaisParaCentavos(p.valorTotal);
 
@@ -146,7 +172,7 @@ export class ProblematicosService {
       cliente,
       origem: "nomus",
       valor: centavos === null ? null : centavos / 100,
-      formaPagamento: ids.map((i) => nomes.get(i) ?? "").filter(Boolean).join(" + "),
+      formaPagamento,
       prazoEntrega: datas[0] ?? dataBr(p.dataEntregaPadrao),
     };
   }
@@ -156,16 +182,60 @@ export class ProblematicosService {
     if (!Number.isInteger(numero) || numero <= 0) throw new ErroProblematicos("Número de pedido inválido.");
     const local = this.db.prepare("SELECT nomus_id, cliente_nome FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
 
+    // A consulta continua em segundo plano mesmo se estourar o tempo: o resultado vai para a cópia local e a próxima vez é instantânea.
+    const consulta = this.buscarNaNomus(numero);
+    consulta.then((d) => d && this.guardarCopia(d)).catch(() => undefined);
+
     let nomus: DetalheDoPedido | null = null;
     let erro: string | null = null;
     try {
-      nomus = await this.buscarNaNomus(numero);
+      nomus = await this.comTempo(consulta);
     } catch (e) {
       erro = e instanceof Error ? e.message : String(e);
     }
     if (nomus) return { ...nomus, cliente: nomus.cliente || (local?.cliente_nome as string) || "", origem: local ? "pcp" : "nomus" };
-    if (local) return { numero, nomusId: local.nomus_id as number, cliente: local.cliente_nome as string, origem: "pcp", valor: null, formaPagamento: "", prazoEntrega: null };
-    throw new ErroProblematicos(erro ? `Não foi possível consultar a Nomus: ${erro}` : `Pedido ${numero} não encontrado.`, erro ? 502 : 404);
+    if (!erro && !local) throw new ErroProblematicos(`Pedido ${numero} não encontrado.`, 404);
+
+    // A Nomus não respondeu a tempo (ou não achou): usa a última cópia, ou o que o PCP já tem do pedido.
+    const copia = this.db.prepare("SELECT * FROM pcp_pedido_financeiro WHERE numero = ?").get(numero) as Linha | undefined;
+    const prog = this.db.prepare("SELECT valor_centavos FROM pcp_pedido WHERE numero_pedido = ? ORDER BY id DESC LIMIT 1").get(numero) as Linha | undefined;
+    const valorCentavos = (copia?.valor_centavos as number | null | undefined) ?? (prog?.valor_centavos as number | null | undefined) ?? null;
+    const forma = (copia?.forma_pagamento as string | undefined) ?? "";
+    const cliente = (local?.cliente_nome as string) || (copia?.cliente_nome as string) || "";
+    if (!local && !copia) throw new ErroProblematicos(`Não foi possível consultar a Nomus: ${erro}`, 502);
+
+    return {
+      numero,
+      nomusId: (local?.nomus_id as number | undefined) ?? null,
+      cliente,
+      origem: "pcp",
+      valor: valorCentavos === null ? null : valorCentavos / 100,
+      formaPagamento: forma,
+      prazoEntrega: (copia?.prazo_entrega as string | null | undefined) ?? null,
+      aviso: copia
+        ? `A Nomus não respondeu agora (${erro}); mostrando a última consulta, de ${String(copia.atualizado_em).slice(0, 10)}.`
+        : `A Nomus não respondeu agora (${erro}). ${valorCentavos !== null ? "O valor vem do cadastro do PCP; a" : "A"} forma de pagamento precisa ser preenchida à mão, ou tente de novo em instantes.`,
+    };
+  }
+
+  private comTempo<T>(p: Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`demorou mais de ${Math.round(this.tempoLimiteMs / 1000)} s`)), this.tempoLimiteMs);
+      p.then(
+        (v) => { clearTimeout(t); resolve(v); },
+        (e) => { clearTimeout(t); reject(e); }
+      );
+    });
+  }
+
+  private guardarCopia(d: DetalheDoPedido): void {
+    this.db
+      .prepare(
+        `INSERT INTO pcp_pedido_financeiro (numero, cliente_nome, valor_centavos, forma_pagamento, prazo_entrega, atualizado_em) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(numero) DO UPDATE SET cliente_nome = excluded.cliente_nome, valor_centavos = excluded.valor_centavos,
+           forma_pagamento = excluded.forma_pagamento, prazo_entrega = excluded.prazo_entrega, atualizado_em = excluded.atualizado_em`
+      )
+      .run(d.numero, d.cliente, d.valor === null ? null : Math.round(d.valor * 100), d.formaPagamento, d.prazoEntrega, this.agora().toISOString());
   }
 
   // ------------------------------------------------------------ CRUD das três tabelas

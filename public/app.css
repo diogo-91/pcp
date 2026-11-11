@@ -120,3 +120,5 @@
 .pb-tabela .pg-in{width:100%;min-width:140px}
 .pb-acoes{width:80px;text-align:right}
 @media(max-width:760px){.pb-form{grid-template-columns:1fr}}
+.pb-aviso{color:#9a5b12;font-weight:650}
+.pb-tabela input[data-campo=formaPagamento]{min-width:340px}

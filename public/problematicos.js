@@ -18,7 +18,7 @@ const TABELAS = {
     titulo: 'Pedidos de Devolução',
     vazio: 'Nenhuma devolução cadastrada.',
     campos: [
-      { k: 'formaPagamento', rotulo: 'Forma de pagamento', tipo: 'text', max: 80 },
+      { k: 'formaPagamento', rotulo: 'Forma de pagamento', tipo: 'text', max: 300 },
       { k: 'valor', rotulo: 'Valor', tipo: 'number' },
     ],
   },
@@ -91,7 +91,8 @@ const selHtml = (s) =>
 function dicaDaAba() {
   const s = P.sel[P.aba];
   if (!s) return P.aba === 'devolucoes' ? 'Escolha o pedido: forma de pagamento e valor são preenchidos sozinhos com os dados do pedido de venda (você pode ajustar).' : 'Digite o número ou o nome do cliente e escolha o pedido na lista.';
-  if (s.carregando) return 'Buscando os dados do pedido…';
+  if (s.carregando) return 'Buscando os dados do pedido na Nomus… (pode levar alguns segundos)';
+  if (s.aviso) return `<span class="pb-aviso">${esc(s.aviso)}</span> <button type="button" class="pg-mini" data-tentar="${s.numero}">Tentar de novo</button>`;
   if (P.aba === 'urgentes' && s.prazoEntrega) return `Prazo de entrega atual do pedido: ${esc(fmtData(s.prazoEntrega))}.`;
   if (P.aba === 'devolucoes' && s.preenchido) return 'Forma de pagamento e valor preenchidos com os dados do pedido de venda da Nomus.';
   return '';
@@ -138,14 +139,14 @@ async function escolher(numero, cliente) {
   try {
     const d = await api(`/api/problematicos/pedidos/${numero}`);
     if (!P.sel[aba] || P.sel[aba].numero !== numero) return;
-    P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false };
+    P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false, aviso: d.aviso || '' };
     renderPainel();
     // Devolução: forma de pagamento e valor saem do pedido de venda.
     if (aba === 'devolucoes' && P.aba === aba) {
       if ($('pb-f-formaPagamento')) $('pb-f-formaPagamento').value = d.formaPagamento || '';
       if ($('pb-f-valor')) $('pb-f-valor').value = d.valor ?? '';
       P.sel[aba].preenchido = !!(d.formaPagamento || d.valor !== null);
-      $('pb-dica').innerHTML = d.formaPagamento || d.valor !== null ? dicaDaAba() : 'A Nomus não trouxe forma de pagamento/valor deste pedido: preencha à mão.';
+      if (!d.aviso) $('pb-dica').innerHTML = d.formaPagamento || d.valor !== null ? dicaDaAba() : 'A Nomus não trouxe forma de pagamento/valor deste pedido: preencha à mão.';
     }
   } catch (e) {
     P.sel[aba] = null;
@@ -220,6 +221,8 @@ dlg.addEventListener('click', (e) => {
   if (aba) { P.aba = aba.dataset.aba; return renderPainel(); }
   const esc_ = e.target.closest('[data-escolher]');
   if (esc_) return void escolher(Number(esc_.dataset.escolher), esc_.dataset.cliente);
+  const tentar = e.target.closest('[data-tentar]');
+  if (tentar) return void escolher(Number(tentar.dataset.tentar), P.sel[P.aba]?.cliente || '');
   if (e.target.closest('[data-limpar-sel]')) { P.sel[P.aba] = null; renderPainel(); return $('pb-busca')?.focus(); }
   if (e.target.id === 'pb-add') return void adicionar();
   const rem = e.target.closest('[data-remover]');
