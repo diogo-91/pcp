@@ -27,6 +27,8 @@ const estado = {
   sync: { executando: false, ultima: null, ultimaComSucesso: null },
   hoje: '',
   sel: new Set(), // pedidos marcados para edição em massa
+  problematicos: 0, // quantos pedidos têm algum problema (o servidor calcula)
+  soProblematicos: false, // botão "Pedidos Problemáticos"
   filtro: 'todos',
   busca: '',
   status: 'todos',
@@ -121,7 +123,12 @@ function renderTopo() {
 }
 
 // ---------------------------------------------------------------- render: dashboard
-const tagHtml = (p) => `<span class="tag ${CLASSE_TAG[p.faixa]}">${esc(p.alerta)}</span>`;
+const tagHtml = (p) =>
+  `<span class="tag ${CLASSE_TAG[p.faixa]}">${esc(p.alerta)}</span>` +
+  // Com o botão "Pedidos Problemáticos" ligado, cada linha mostra POR QUE é problemática.
+  (estado.soProblematicos && p.problemas?.length
+    ? `<span class="problemas">${p.problemas.filter((x) => x.codigo !== 'atrasado').map((x) => `<i title="${esc(x.texto)}">${esc(x.texto)}</i>`).join('')}</span>`
+    : '');
 
 function renderDashboard() {
   const r = estado.resumo;
@@ -216,6 +223,7 @@ function pedidosVisiveis() {
   const q = estado.busca.trim().toLowerCase();
   return estado.pedidos.filter(
     (p) =>
+      (!estado.soProblematicos || p.problemas.length > 0) &&
       (estado.filtro === 'todos' || p.faixa === estado.filtro) &&
       (estado.status === 'todos' || p.statusPcp === estado.status) &&
       (!q || [p.clienteNome, p.telefone, p.codigoPedido, String(p.numero), p.statusPcp, p.atendimento, p.responsavel, p.acao].some((v) => String(v ?? '').toLowerCase().includes(q)))
@@ -243,7 +251,10 @@ function renderTabela() {
 
   $('linhas').innerHTML = lista.length ? lista.map(linhaHtml).join('') : `<tr><td colspan="12" class="vazio-tabela">${mensagemVazia()}</td></tr>`;
   $('contagem').textContent = `${lista.length.toLocaleString('pt-BR')} de ${estado.pedidos.length.toLocaleString('pt-BR')} pedidos`;
-  $('chip-filtro').textContent = NOMES_FILTRO[estado.filtro] || NOMES_FILTRO.todos;
+  $('chip-filtro').textContent = estado.soProblematicos ? `Só pedidos problemáticos${estado.filtro !== 'todos' ? ' · ' + (NOMES_FILTRO[estado.filtro] || '') : ''}` : NOMES_FILTRO[estado.filtro] || NOMES_FILTRO.todos;
+  $('n-problemas').textContent = estado.problematicos.toLocaleString('pt-BR');
+  $('btn-problemas').classList.toggle('ligado', estado.soProblematicos);
+  $('btn-problemas').setAttribute('aria-pressed', String(estado.soProblematicos));
   const pl = estado.planejamento;
   const textoProducao = !pl
     ? ''
@@ -672,6 +683,11 @@ document.querySelectorAll('.stat').forEach((el) =>
     mostrarView('tabela');
   })
 );
+
+$('btn-problemas').addEventListener('click', () => {
+  estado.soProblematicos = !estado.soProblematicos;
+  renderTabela();
+});
 
 $('busca').addEventListener('input', (e) => {
   estado.busca = e.target.value;

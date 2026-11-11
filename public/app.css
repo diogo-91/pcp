@@ -93,3 +93,14 @@
 .massa-campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:12px}
 .massa-campos label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6c7d8f}
 .massa-campos select,.massa-campos input{border:1px solid #dce4ec;border-radius:8px;padding:8px 9px;font-size:12px;background:#fff;color:#26394e;text-transform:none;letter-spacing:0;font-weight:500}
+
+/* Botão "Pedidos Problemáticos" e os motivos mostrados na coluna Alerta */
+.btn-problemas{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 14px;border-radius:8px;border:1px solid #f0c7cb;background:#fff5f6;color:#b23a47;font-size:12px;font-weight:800;transition:background .12s,border-color .12s}
+.btn-problemas:hover{background:#ffe9ed;border-color:#e8a6ae}
+.btn-problemas b{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:10px;background:#d84b56;color:#fff;font-size:11px}
+.btn-problemas.ligado{background:#d84b56;border-color:#d84b56;color:#fff;box-shadow:0 0 0 3px #d84b5626}
+.btn-problemas.ligado b{background:#fff;color:#b23a47}
+.problemas{display:flex;flex-direction:column;gap:2px;margin-top:4px;max-width:230px}
+.problemas i{font-style:normal;font-size:10px;line-height:1.3;color:#8f2b36;white-space:normal}
+.tablewrap td[data-celula=alerta]{vertical-align:top;padding-top:8px}
+@media(max-width:760px){.btn-problemas{width:100%;justify-content:center}}

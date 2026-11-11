@@ -148,6 +148,9 @@
           <div class="filters">
             <input id="busca" placeholder="Buscar cliente, pedido, telefone, atendimento, ação..." aria-label="Buscar pedidos">
             <select id="filtro-status" aria-label="Filtrar por status"><option value="todos">Todos os status</option></select>
+            <button type="button" class="btn-problemas" id="btn-problemas" aria-pressed="false" title="Pedidos que pedem ação: prazo vencido, sem prazo, produção depois da entrega, vencendo sem programação ou sem telefone">
+              <span aria-hidden="true">⚠</span> Pedidos Problemáticos <b id="n-problemas">0</b>
+            </button>
             <div class="filter-chip" id="chip-filtro">Todos os pedidos</div>
           </div>
           <div class="sheet-hint">
