@@ -46,6 +46,10 @@ function montar() {
 }
 
 function renderPainel() {
+  // O painel é redesenhado quando os dados do pedido chegam da Nomus: o que já foi digitado no formulário não pode sumir.
+  const digitado = {};
+  document.querySelectorAll('#pb-painel [id^="pb-f-"]').forEach((el) => { digitado[el.id] = el.value; });
+
   const t = TABELAS[P.aba];
   const lista = P.dados[P.aba];
   const sel = P.sel[P.aba];
@@ -77,6 +81,8 @@ function renderPainel() {
     <div class="pg-wrap" style="max-height:340px"><table class="pg-tabela pb-tabela">
       <thead><tr><th>Número do pedido</th>${t.campos.map((c) => `<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr></thead>
       <tbody>${linhas || `<tr><td colspan="${t.campos.length + 2}" class="pg-vazio">${esc(t.vazio)}</td></tr>`}</tbody></table></div>`;
+
+  for (const [id, v] of Object.entries(digitado)) if (v !== '' && $(id)) $(id).value = v;
 
   document.querySelectorAll('#pb-abas [data-aba]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.aba === P.aba)));
   for (const k of Object.keys(TABELAS)) {
@@ -143,8 +149,8 @@ async function escolher(numero, cliente) {
     renderPainel();
     // Devolução: forma de pagamento e valor saem do pedido de venda.
     if (aba === 'devolucoes' && P.aba === aba) {
-      if ($('pb-f-formaPagamento')) $('pb-f-formaPagamento').value = d.formaPagamento || '';
-      if ($('pb-f-valor')) $('pb-f-valor').value = d.valor ?? '';
+      if ($('pb-f-formaPagamento') && !$('pb-f-formaPagamento').value) $('pb-f-formaPagamento').value = d.formaPagamento || '';
+      if ($('pb-f-valor') && !$('pb-f-valor').value) $('pb-f-valor').value = d.valor ?? '';
       P.sel[aba].preenchido = !!(d.formaPagamento || d.valor !== null);
       if (!d.aviso) $('pb-dica').innerHTML = d.formaPagamento || d.valor !== null ? dicaDaAba() : 'A Nomus não trouxe forma de pagamento/valor deste pedido: preencha à mão.';
     }
@@ -161,7 +167,8 @@ async function adicionar() {
   erro('');
   const t = TABELAS[P.aba];
   const sel = P.sel[P.aba];
-  if (!sel || sel.carregando) return erro('Escolha o pedido na busca primeiro.');
+  if (!sel) return erro('Escolha o pedido na busca primeiro.');
+  if (sel.carregando && P.aba === 'devolucoes') return erro('Aguarde um instante: buscando a forma de pagamento e o valor do pedido na Nomus…');
   const corpo = { numeroPedido: sel.numero, cliente: sel.cliente };
   for (const c of t.campos) {
     const v = $(`pb-f-${c.k}`).value.trim();
