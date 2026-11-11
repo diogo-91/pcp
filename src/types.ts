@@ -48,11 +48,6 @@ export interface PedidoRow extends PedidoNomus, Tratativa {
   producaoItens: ItemProducao[];
 }
 
-export interface Problema {
-  codigo: "atrasado" | "sem_prazo" | "producao_depois_da_entrega" | "vence_sem_producao" | "sem_telefone" | "sem_nome";
-  texto: string;
-}
-
 /** Linha como o frontend recebe: o alerta de prazo já vem calculado pelo servidor. */
 export interface PedidoPcp extends PedidoRow {
   diasParaPrazo: number | null;
@@ -60,8 +55,6 @@ export interface PedidoPcp extends PedidoRow {
   alerta: string;
   /** True quando a produção está programada para DEPOIS do prazo de entrega. */
   producaoAposEntrega: boolean;
-  /** Motivos pelos quais o pedido merece atenção (vazio = nenhum). Calculado no servidor; ver `problemasDoPedido`. */
-  problemas: Problema[];
 }
 
 export interface Resumo {

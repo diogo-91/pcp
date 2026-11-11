@@ -97,18 +97,10 @@
 /* Botão "Pedidos Problemáticos" e os motivos mostrados na coluna Alerta */
 .btn-problemas{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 14px;border-radius:8px;border:1px solid #f0c7cb;background:#fff5f6;color:#b23a47;font-size:12px;font-weight:800;transition:background .12s,border-color .12s}
 .btn-problemas:hover{background:#ffe9ed;border-color:#e8a6ae}
-.btn-problemas b{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:10px;background:#d84b56;color:#fff;font-size:11px}
-.btn-problemas.ligado{background:#d84b56;border-color:#d84b56;color:#fff;box-shadow:0 0 0 3px #d84b5626}
-.btn-problemas.ligado b{background:#fff;color:#b23a47}
-.problemas{display:flex;flex-direction:column;gap:2px;margin-top:4px;max-width:230px}
-.problemas i{font-style:normal;font-size:10px;line-height:1.3;color:#8f2b36;white-space:normal}
-.tablewrap td[data-celula=alerta]{vertical-align:top;padding-top:8px}
 @media(max-width:760px){.btn-problemas{width:100%;justify-content:center}}
 
 /* Painel "Pedidos Problemáticos" (3 tabelas) */
-.pb-dialog{width:min(1040px,95vw)}
-.pb-corpo{padding:14px 20px 20px;max-height:calc(90vh - 70px);overflow:auto}
-.pb-filtro{margin-bottom:10px;padding:8px 10px;background:#fff5f6;border:1px solid #f0c7cb;border-radius:9px;color:#8f2b36;white-space:normal}
+.pb-corpo{padding:16px 22px 22px}
 .pb-abas{margin:0 0 14px}
 .pb-n{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;padding:0 5px;border-radius:9px;background:#edf1f5;color:#40566b;font-size:10px;font-weight:800;margin-left:4px}
 .pb-n:empty{display:none}

@@ -27,8 +27,6 @@ const estado = {
   sync: { executando: false, ultima: null, ultimaComSucesso: null },
   hoje: '',
   sel: new Set(), // pedidos marcados para edição em massa
-  problematicos: 0, // quantos pedidos têm algum problema (o servidor calcula)
-  soProblematicos: false, // botão "Pedidos Problemáticos"
   filtro: 'todos',
   busca: '',
   status: 'todos',
@@ -123,12 +121,7 @@ function renderTopo() {
 }
 
 // ---------------------------------------------------------------- render: dashboard
-const tagHtml = (p) =>
-  `<span class="tag ${CLASSE_TAG[p.faixa]}">${esc(p.alerta)}</span>` +
-  // Com o botão "Pedidos Problemáticos" ligado, cada linha mostra POR QUE é problemática.
-  (estado.soProblematicos && p.problemas?.length
-    ? `<span class="problemas">${p.problemas.filter((x) => x.codigo !== 'atrasado').map((x) => `<i title="${esc(x.texto)}">${esc(x.texto)}</i>`).join('')}</span>`
-    : '');
+const tagHtml = (p) => `<span class="tag ${CLASSE_TAG[p.faixa]}">${esc(p.alerta)}</span>`;
 
 function renderDashboard() {
   const r = estado.resumo;
@@ -223,7 +216,6 @@ function pedidosVisiveis() {
   const q = estado.busca.trim().toLowerCase();
   return estado.pedidos.filter(
     (p) =>
-      (!estado.soProblematicos || p.problemas.length > 0) &&
       (estado.filtro === 'todos' || p.faixa === estado.filtro) &&
       (estado.status === 'todos' || p.statusPcp === estado.status) &&
       (!q || [p.clienteNome, p.telefone, p.codigoPedido, String(p.numero), p.statusPcp, p.atendimento, p.responsavel, p.acao].some((v) => String(v ?? '').toLowerCase().includes(q)))
@@ -251,10 +243,7 @@ function renderTabela() {
 
   $('linhas').innerHTML = lista.length ? lista.map(linhaHtml).join('') : `<tr><td colspan="12" class="vazio-tabela">${mensagemVazia()}</td></tr>`;
   $('contagem').textContent = `${lista.length.toLocaleString('pt-BR')} de ${estado.pedidos.length.toLocaleString('pt-BR')} pedidos`;
-  $('chip-filtro').textContent = estado.soProblematicos ? `Só pedidos problemáticos${estado.filtro !== 'todos' ? ' · ' + (NOMES_FILTRO[estado.filtro] || '') : ''}` : NOMES_FILTRO[estado.filtro] || NOMES_FILTRO.todos;
-  $('n-problemas').textContent = estado.problematicos.toLocaleString('pt-BR');
-  $('btn-problemas').classList.toggle('ligado', estado.soProblematicos);
-  $('btn-problemas').setAttribute('aria-pressed', String(estado.soProblematicos));
+  $('chip-filtro').textContent = NOMES_FILTRO[estado.filtro] || NOMES_FILTRO.todos;
   const pl = estado.planejamento;
   const textoProducao = !pl
     ? ''
@@ -629,8 +618,9 @@ function mostrarView(qual, { rolarTopo = true } = {}) {
   $('view-dashboard').hidden = qual !== 'dashboard';
   $('view-tabela').hidden = qual !== 'tabela';
   $('view-programacao').hidden = qual !== 'programacao';
-  document.querySelectorAll('.navtab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === qual)));
-  $('crumb').textContent = { dashboard: 'Dashboard', tabela: 'Tabela de pedidos', programacao: 'Programação de produção' }[qual] || 'Dashboard';
+  $('view-problematicos').hidden = qual !== 'problematicos';
+  document.querySelectorAll('.navtab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === (qual === 'problematicos' ? 'tabela' : qual))));
+  $('crumb').textContent = { dashboard: 'Dashboard', tabela: 'Tabela de pedidos', programacao: 'Programação de produção', problematicos: 'Pedidos problemáticos' }[qual] || 'Dashboard';
   if (qual === 'programacao') window.PCP?.programacao?.ativar?.();
   if (rolarTopo) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -684,15 +674,8 @@ document.querySelectorAll('.stat').forEach((el) =>
   })
 );
 
-// O botão abre o painel de registros (urgentes, devoluções, clientes/defeitos): problematicos.js.
+// O botão abre a tela "Pedidos problemáticos" (urgentes, devoluções, clientes/defeitos): problematicos.js.
 $('btn-problemas').addEventListener('click', () => window.PCP.problematicos?.abrir?.());
-
-// O filtro "só pedidos com alerta automático" (o antigo comportamento do botão) agora fica dentro do painel.
-window.PCP_TABELA = {
-  get soAlertas() { return estado.soProblematicos; },
-  get contagem() { return estado.problematicos; },
-  definirSoAlertas(ligado) { estado.soProblematicos = ligado; renderTabela(); },
-};
 
 $('busca').addEventListener('input', (e) => {
   estado.busca = e.target.value;
@@ -711,6 +694,6 @@ setInterval(() => {
 }, 60_000);
 
 // Peças que o módulo Programação (programacao.js) reaproveita: mesmo token, mesmos avisos.
-window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario, tabela: window.PCP_TABELA };
+window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario };
 
 carregar();

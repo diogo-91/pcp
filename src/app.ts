@@ -151,7 +151,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       hoje,
       pedidos,
       ocultosMuitoAtrasados: ocultos.length,
-      problematicos: pedidos.filter((p) => p.problemas.length > 0).length,
       resumo: montarResumo(pedidos),
       opcoes: {
         statusPcp: STATUS_PCP,

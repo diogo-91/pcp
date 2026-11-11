@@ -148,8 +148,8 @@
           <div class="filters">
             <input id="busca" placeholder="Buscar cliente, pedido, telefone, atendimento, ação..." aria-label="Buscar pedidos">
             <select id="filtro-status" aria-label="Filtrar por status"><option value="todos">Todos os status</option></select>
-            <button type="button" class="btn-problemas" id="btn-problemas" aria-pressed="false" title="Pedidos urgentes, devoluções e clientes/defeitos">
-              <span aria-hidden="true">⚠</span> Pedidos Problemáticos <b id="n-problemas">0</b>
+            <button type="button" class="btn-problemas" id="btn-problemas" title="Pedidos urgentes, devoluções e clientes/defeitos">
+              <span aria-hidden="true">⚠</span> Pedidos Problemáticos
             </button>
             <div class="filter-chip" id="chip-filtro">Todos os pedidos</div>
           </div>
@@ -289,6 +289,19 @@
         </dialog>
       </section>
 
+      <!-- ============ PEDIDOS PROBLEMÁTICOS (tela própria) ============ -->
+      <section id="view-problematicos" class="view" hidden>
+        <div class="viewhead">
+          <div>
+            <div class="eyebrow">CONTROLE OPERACIONAL</div>
+            <h2>Pedidos problemáticos</h2>
+            <p>Registre os pedidos urgentes, as devoluções e os clientes com defeito. Escolha o pedido pela busca: os dados dele são preenchidos sozinhos.</p>
+          </div>
+          <button type="button" class="btn-sync" id="pb-voltar">← Voltar para a tabela de pedidos</button>
+        </div>
+        <article class="panel"><div id="pb-raiz" class="pb-corpo"></div></article>
+      </section>
+
       <div class="notice">
         Nome do cliente, número do pedido, telefone e prazo de entrega vêm da <b>Nomus</b> (pedidos com status “Liberado”) quando o pedido <b>entra</b> na tabela.
         A sincronização só <b>inclui pedidos novos</b>: um pedido que já está aqui nunca é alterado por ela, então o <b>prazo</b>, o status, o atendimento, o responsável e o plano de ação que você ajustar ficam exatamente como estão, salvos no banco de dados e compartilhados por todos.
@@ -299,7 +312,6 @@
     </div>
   </div>
 </main>
-<dialog id="dlg-prob" class="pg-dialog pb-dialog" aria-label="Pedidos problemáticos"></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="/app.js"></script>
 <script type="module" src="/programacao.js"></script>

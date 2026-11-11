@@ -37,16 +37,11 @@ const P = { aba: 'urgentes', dados: { urgentes: [], devolucoes: [], defeitos: []
 // ---------------------------------------------------------------- estrutura do painel
 
 function montar() {
-  const dlg = $('dlg-prob');
-  dlg.innerHTML = `
-    <form method="dialog" class="pg-dialog-topo"><h3>Pedidos Problemáticos</h3><button class="btn-sync">Fechar</button></form>
-    <div class="pb-corpo">
-      <label class="pg-check pb-filtro"><input type="checkbox" id="pb-filtro"> Mostrar na tabela só os pedidos com alerta automático (<span id="pb-contagem">0</span>: prazo vencido, sem prazo, produção depois da entrega…)</label>
-      <nav class="pg-abas pb-abas" id="pb-abas">${Object.entries(TABELAS)
-        .map(([k, t]) => `<button type="button" data-aba="${k}" aria-selected="${k === P.aba}">${esc(t.titulo)} <span class="pb-n" data-n="${k}"></span></button>`)
-        .join('')}</nav>
-      <div id="pb-painel"></div>
-    </div>`;
+  $('pb-raiz').innerHTML = `
+    <nav class="pg-abas pb-abas" id="pb-abas">${Object.entries(TABELAS)
+      .map(([k, t]) => `<button type="button" data-aba="${k}" aria-selected="${k === P.aba}">${esc(t.titulo)} <span class="pb-n" data-n="${k}"></span></button>`)
+      .join('')}</nav>
+    <div id="pb-painel"></div>`;
   renderPainel();
 }
 
@@ -218,7 +213,7 @@ async function remover(id) {
 
 // ---------------------------------------------------------------- eventos
 
-const dlg = $('dlg-prob');
+const dlg = $('view-problematicos');
 
 dlg.addEventListener('click', (e) => {
   const aba = e.target.closest('#pb-abas [data-aba]');
@@ -250,20 +245,15 @@ dlg.addEventListener('keydown', (e) => {
 });
 
 dlg.addEventListener('change', (e) => {
-  if (e.target.id === 'pb-filtro') return void window.PCP.tabela?.definirSoAlertas(e.target.checked);
   if (e.target.matches('.pb-tabela input[data-campo]')) salvarLinha(e.target);
 });
 
-dlg.addEventListener('close', () => {
-  for (const k of Object.keys(P.sel)) P.sel[k] = null;
-});
+$('pb-voltar').addEventListener('click', () => window.PCP.mostrarView('tabela'));
 
 window.PCP.problematicos = {
   async abrir() {
-    if (!dlg.childElementCount) montar();
-    $('pb-filtro').checked = !!window.PCP.tabela?.soAlertas;
-    $('pb-contagem').textContent = String(window.PCP.tabela?.contagem ?? 0);
-    dlg.showModal();
+    if (!$('pb-raiz').childElementCount) montar();
+    window.PCP.mostrarView('problematicos');
     await carregar();
   },
 };
