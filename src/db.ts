@@ -332,6 +332,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE pcp_devolucao ADD COLUMN status TEXT NOT NULL DEFAULT 'NAO_REALIZADA';
   ALTER TABLE pcp_defeito ADD COLUMN status TEXT NOT NULL DEFAULT 'NAO_REALIZADA';
   `,
+  // Clientes / Defeitos: o que será feito (ação) e até quando (prazo da ação).
+  `
+  ALTER TABLE pcp_defeito ADD COLUMN acao TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pcp_defeito ADD COLUMN prazo_acao TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

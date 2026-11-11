@@ -4,7 +4,7 @@ import { ErroProblematicos, TIPOS_PROBLEMATICOS, type ProblematicosService, type
 const CAMPOS: Record<TipoProblematico, string[]> = {
   urgentes: ["numeroPedido", "cliente", "dataEntregaCombinada", "status"],
   devolucoes: ["numeroPedido", "cliente", "formaPagamento", "valor", "status"],
-  defeitos: ["numeroPedido", "cliente", "causa", "motorista", "status"],
+  defeitos: ["numeroPedido", "cliente", "causa", "motorista", "acao", "prazoAcao", "status"],
 };
 
 /** Copia só os campos permitidos do corpo (vem do navegador). */

@@ -128,3 +128,4 @@
 .pb-st-NAO_REALIZADA{background:#fff2d6;color:#936711}
 .pb-st-REALIZADA{background:#e8f7ed;color:#257a4d}
 .pb-mostrar{margin:2px 2px 8px;font-size:12px}
+.pb-tabela input[data-campo=acao]{min-width:260px}

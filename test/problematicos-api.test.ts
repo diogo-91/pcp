@@ -238,3 +238,21 @@ test("status: todo registro nasce NAO_REALIZADA; dá para marcar REALIZADA e vol
   const ja = await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "X", status: "REALIZADA" } });
   assert.equal((ja.json() as { defeitos: Array<{ status: string }> }).defeitos[0].status, "REALIZADA");
 });
+
+test("clientes/defeitos: ação (texto) e prazo da ação (data opcional, pode ser limpo)", async () => {
+  const { app } = await montar();
+  const r = await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "Amassada", motorista: "João", acao: "Trocar 3 telhas", prazoAcao: "2026-12-05" } });
+  assert.equal(r.statusCode, 201);
+  const d = (r.json() as { defeitos: Array<Record<string, unknown>> }).defeitos[0];
+  assert.deepEqual([d.acao, d.prazoAcao, d.status], ["Trocar 3 telhas", "2026-12-05", "NAO_REALIZADA"]);
+
+  const sem = (await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "Risco" } })).json() as { defeitos: Array<Record<string, unknown>> };
+  assert.deepEqual([sem.defeitos[0].acao, sem.defeitos[0].prazoAcao], ["", null], "ação e prazo são opcionais");
+
+  const id = d.id as number;
+  const limpo = (await app.inject({ method: "PATCH", url: `/api/problematicos/defeitos/${id}`, payload: { prazoAcao: null, acao: "Reagendar" } })).json() as { defeitos: Array<Record<string, unknown>> };
+  const atual = limpo.defeitos.find((x) => x.id === id)!;
+  assert.deepEqual([atual.acao, atual.prazoAcao], ["Reagendar", null], "o prazo pode ser apagado");
+  assert.equal((await app.inject({ method: "PATCH", url: `/api/problematicos/defeitos/${id}`, payload: { prazoAcao: "xx" } })).statusCode, 400);
+  assert.equal((await app.inject({ method: "PATCH", url: `/api/problematicos/defeitos/${id}`, payload: { acao: "x".repeat(501) } })).statusCode, 400);
+});

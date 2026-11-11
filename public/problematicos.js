@@ -35,6 +35,8 @@ const TABELAS = {
     campos: [
       { k: 'causa', rotulo: 'Causa', tipo: 'text', max: 500, obrigatorio: true },
       { k: 'motorista', rotulo: 'Motorista', tipo: 'text', max: 100 },
+      { k: 'acao', rotulo: 'Ação', tipo: 'text', max: 500 },
+      { k: 'prazoAcao', rotulo: 'Prazo da ação', tipo: 'date' },
       STATUS,
     ],
   },
@@ -212,7 +214,11 @@ async function salvarLinha(el) {
   let v = el.value.trim();
   if (c.tipo === 'date' && v && !/^(20\d\d)-\d\d-\d\d$/.test(v)) return; // ano ainda sendo digitado
   if (c.tipo === 'number') v = v === '' ? null : Number(v);
-  if (c.tipo === 'date' && v === '') { el.value = P.dados[P.aba].find((r) => String(r.id) === id)?.[c.k] ?? ''; return; }
+  if (c.tipo === 'date' && v === '') {
+    // Data obrigatória não pode ser apagada; a opcional (ex.: prazo da ação) pode ser limpa.
+    if (c.obrigatorio) { el.value = P.dados[P.aba].find((r) => String(r.id) === id)?.[c.k] ?? ''; return; }
+    v = null;
+  }
   el.classList.add('salvando');
   try {
     await window.PCP.programacao?.garantirUsuario?.();

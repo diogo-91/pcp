@@ -48,6 +48,8 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
     campos: [
       { chave: "causa", coluna: "causa", tipo: "texto", max: 500, obrigatorio: true },
       { chave: "motorista", coluna: "motorista", tipo: "texto", max: 100 },
+      { chave: "acao", coluna: "acao", tipo: "texto", max: 500 },
+      { chave: "prazoAcao", coluna: "prazo_acao", tipo: "data" },
       { chave: "status", coluna: "status", tipo: "status" },
     ],
   },
@@ -368,4 +370,4 @@ export class ProblematicosService {
 }
 
 const rotulo = (chave: string) =>
-  ({ status: "o status", dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;
+  ({ acao: "a ação", prazoAcao: "o prazo da ação", status: "o status", dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;
