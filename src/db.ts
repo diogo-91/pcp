@@ -280,6 +280,41 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE pcp_pedido ADD COLUMN obs_nomus_em TEXT;
   `,
+  // Botão "Pedidos Problemáticos" da Tabela de pedidos: três registros manuais do PCP, ligados ao pedido pelo número.
+  `
+  CREATE TABLE IF NOT EXISTS pcp_urgente (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_pedido          INTEGER NOT NULL,
+    cliente_nome           TEXT NOT NULL DEFAULT '',
+    data_entrega_combinada TEXT NOT NULL,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    updated_by             TEXT NOT NULL DEFAULT 'PCP'
+  );
+  CREATE TABLE IF NOT EXISTS pcp_devolucao (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_pedido   INTEGER NOT NULL,
+    cliente_nome    TEXT NOT NULL DEFAULT '',
+    forma_pagamento TEXT NOT NULL DEFAULT '',
+    valor_centavos  INTEGER,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    updated_by      TEXT NOT NULL DEFAULT 'PCP'
+  );
+  CREATE TABLE IF NOT EXISTS pcp_defeito (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_pedido INTEGER NOT NULL,
+    cliente_nome  TEXT NOT NULL DEFAULT '',
+    causa         TEXT NOT NULL,
+    motorista     TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    updated_by    TEXT NOT NULL DEFAULT 'PCP'
+  );
+  CREATE INDEX IF NOT EXISTS idx_pcp_urgente_pedido ON pcp_urgente (numero_pedido);
+  CREATE INDEX IF NOT EXISTS idx_pcp_devolucao_pedido ON pcp_devolucao (numero_pedido);
+  CREATE INDEX IF NOT EXISTS idx_pcp_defeito_pedido ON pcp_defeito (numero_pedido);
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

@@ -8,6 +8,8 @@ import { LimitadorPorJanela } from "./limite";
 import { paginaInicial } from "./pagina";
 import { registrarProgramacao } from "./programacao/http";
 import type { ProgramacaoService } from "./programacao/service";
+import { registrarProblematicos } from "./problematicos-http";
+import type { ProblematicosService } from "./problematicos";
 import type { PlanejamentoService } from "./planejamento";
 import { hojeEmSaoPaulo } from "./prazo";
 import { consultarPedidoPublico } from "./publico";
@@ -31,6 +33,8 @@ export interface AppDeps {
   extrasProgramacao?: import("./programacao/extras").ExtrasService;
   /** Preenche observações vazias com as do pedido de venda da Nomus (rodada em segundo plano). */
   observacoesNomusProgramacao?: (iniciar: boolean) => unknown;
+  /** Botão "Pedidos Problemáticos": pedidos urgentes, devoluções e clientes/defeitos. */
+  problematicos?: ProblematicosService;
   /** Vazio = sem autenticação (uso local). */
   accessToken: string;
   /** Segundo código, de perfil "consulta": só lê a Programação, sem telefone de clientes e sem editar. Vazio = não existe. */
@@ -90,6 +94,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   }
 
+  if (deps.problematicos) registrarProblematicos(app, deps.problematicos);
   if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao, deps.extrasProgramacao, deps.observacoesNomusProgramacao);
   else app.decorateRequest("perfil", "completo");
 

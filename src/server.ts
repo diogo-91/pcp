@@ -9,6 +9,7 @@ import { importarDeArquivo } from "./programacao/importacao";
 import { ProgramacaoRepository } from "./programacao/repo";
 import { ProgramacaoService } from "./programacao/service";
 import { ProgramacaoSync } from "./programacao/sync";
+import { ProblematicosService } from "./problematicos";
 import { PcpRepository } from "./repository";
 import { SyncService, type Logger } from "./sync";
 
@@ -78,6 +79,7 @@ const app = await buildApp({
   sync,
   planejamento,
   programacao: progServico,
+  problematicos: new ProblematicosService(db, nomus),
   extrasProgramacao: new ExtrasService(db, progServico, progRepo),
   observacoesNomusProgramacao,
   sincronizarPedidoProgramacao: (id) => progSync.sincronizarPedido(id),

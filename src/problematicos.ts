@@ -1,0 +1,276 @@
+import type { DatabaseSync } from "node:sqlite";
+import { inTransaction } from "./db";
+import { isDataPlausivel } from "./prazo";
+import { reaisParaCentavos } from "./programacao/regras";
+import type { NomusLeitor } from "./sync";
+
+type Linha = Record<string, unknown>;
+
+export class ErroProblematicos extends Error {
+  constructor(
+    mensagem: string,
+    public readonly codigo = 400
+  ) {
+    super(mensagem);
+  }
+}
+
+export const TIPOS_PROBLEMATICOS = ["urgentes", "devolucoes", "defeitos"] as const;
+export type TipoProblematico = (typeof TIPOS_PROBLEMATICOS)[number];
+
+interface CampoDef {
+  chave: string;
+  coluna: string;
+  tipo: "data" | "texto" | "dinheiro";
+  max?: number;
+  obrigatorio?: boolean;
+}
+
+/** As três tabelas do botão "Pedidos Problemáticos": o número do pedido é comum; o resto muda. */
+const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> = {
+  urgentes: { tabela: "pcp_urgente", campos: [{ chave: "dataEntregaCombinada", coluna: "data_entrega_combinada", tipo: "data", obrigatorio: true }] },
+  devolucoes: {
+    tabela: "pcp_devolucao",
+    campos: [
+      { chave: "formaPagamento", coluna: "forma_pagamento", tipo: "texto", max: 80 },
+      { chave: "valor", coluna: "valor_centavos", tipo: "dinheiro" },
+    ],
+  },
+  defeitos: {
+    tabela: "pcp_defeito",
+    campos: [
+      { chave: "causa", coluna: "causa", tipo: "texto", max: 500, obrigatorio: true },
+      { chave: "motorista", coluna: "motorista", tipo: "texto", max: 100 },
+    ],
+  },
+};
+
+export interface PedidoEncontrado {
+  numero: number;
+  nomusId: number | null;
+  cliente: string;
+  /** Onde achou: o próprio PCP ou a Nomus (pedido antigo que já saiu da tabela). */
+  origem: "pcp" | "nomus";
+}
+
+export interface DetalheDoPedido extends PedidoEncontrado {
+  /** Valor total do pedido de venda, em reais. */
+  valor: number | null;
+  /** Forma(s) de pagamento do pedido de venda, ex.: "Pix" ou "Pix + Cartão de Crédito". */
+  formaPagamento: string;
+  prazoEntrega: string | null;
+}
+
+interface NomusPedido {
+  id?: number;
+  codigoPedido?: string;
+  idPessoaCliente?: number;
+  idFormaPagamento?: number;
+  valorTotal?: string;
+  dataEntregaPadrao?: string;
+  itensPedido?: Array<{ dataEntrega?: string }>;
+  parcelas?: Array<{ idFormaPagamento?: number }>;
+}
+
+const codigoDoPedido = (numero: number) => `PD ${String(numero).padStart(5, "0")}`;
+const limpar = (t: unknown) => String(t ?? "").replace(/\s+/g, " ").trim();
+
+function dataBr(texto: string | undefined): string | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(texto ?? "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+export class ProblematicosService {
+  private formasCache: { em: number; nomes: Map<number, string> } | null = null;
+
+  constructor(
+    private readonly db: DatabaseSync,
+    private readonly nomus: NomusLeitor | null,
+    private readonly agora: () => Date = () => new Date()
+  ) {}
+
+  // ------------------------------------------------------------ busca e preenchimento automático
+
+  /** Busca por número (começa com) ou por nome do cliente; se for um número exato que o PCP não tem, tenta a Nomus. */
+  async buscarPedidos(q: string): Promise<PedidoEncontrado[]> {
+    const t = limpar(q);
+    if (t.length < 1) return [];
+    const achados: PedidoEncontrado[] = [];
+
+    if (/^\d+$/.test(t)) {
+      const linhas = this.db.prepare("SELECT nomus_id, numero, cliente_nome FROM pedidos WHERE CAST(numero AS TEXT) LIKE ? ORDER BY numero DESC LIMIT 8").all(`${t}%`) as Linha[];
+      for (const l of linhas) achados.push({ numero: l.numero as number, nomusId: l.nomus_id as number, cliente: l.cliente_nome as string, origem: "pcp" });
+      const exato = Number(t);
+      if (!achados.some((a) => a.numero === exato) && exato > 0 && this.nomus) {
+        const n = await this.buscarNaNomus(exato).catch(() => null);
+        if (n) achados.unshift({ numero: exato, nomusId: n.nomusId, cliente: n.cliente, origem: "nomus" });
+      }
+    } else if (t.length >= 2) {
+      const curinga = `%${t.replace(/[%_]/g, "")}%`;
+      const linhas = this.db.prepare("SELECT nomus_id, numero, cliente_nome FROM pedidos WHERE cliente_nome LIKE ? ORDER BY numero DESC LIMIT 8").all(curinga) as Linha[];
+      for (const l of linhas) achados.push({ numero: l.numero as number, nomusId: l.nomus_id as number, cliente: l.cliente_nome as string, origem: "pcp" });
+    }
+    return achados;
+  }
+
+  private async nomesDasFormas(): Promise<Map<number, string>> {
+    const agora = this.agora().getTime();
+    if (this.formasCache && agora - this.formasCache.em < 24 * 3600_000) return this.formasCache.nomes;
+    const lista = this.nomus ? await this.nomus.get<Array<{ id?: number; nome?: string; descricao?: string }>>("/formasPagamento") : [];
+    const nomes = new Map<number, string>();
+    for (const f of Array.isArray(lista) ? lista : []) if (typeof f.id === "number") nomes.set(f.id, limpar(f.nome ?? f.descricao));
+    this.formasCache = { em: agora, nomes };
+    return nomes;
+  }
+
+  private async buscarNaNomus(numero: number): Promise<DetalheDoPedido | null> {
+    if (!this.nomus) return null;
+    const lista = await this.nomus.get<NomusPedido[]>(`/pedidos?query=${encodeURIComponent(`codigoPedido=="${codigoDoPedido(numero)}"`)}`);
+    const p = Array.isArray(lista) ? lista.find((x) => limpar(x.codigoPedido) === codigoDoPedido(numero)) : undefined;
+    if (!p || typeof p.id !== "number") return null;
+
+    let cliente = "";
+    if (typeof p.idPessoaCliente === "number") {
+      const pessoa = await this.nomus.get<{ nome?: string }>(`/pessoas/${p.idPessoaCliente}`).catch(() => null);
+      cliente = limpar(pessoa?.nome);
+    }
+    const nomes = await this.nomesDasFormas().catch(() => new Map<number, string>());
+    const ids = [...new Set((p.parcelas ?? []).map((x) => x.idFormaPagamento).filter((v): v is number => typeof v === "number"))];
+    if (ids.length === 0 && typeof p.idFormaPagamento === "number") ids.push(p.idFormaPagamento);
+    const datas = (p.itensPedido ?? []).map((i) => dataBr(i.dataEntrega)).filter((d): d is string => d !== null).sort();
+    const centavos = reaisParaCentavos(p.valorTotal);
+
+    return {
+      numero,
+      nomusId: p.id,
+      cliente,
+      origem: "nomus",
+      valor: centavos === null ? null : centavos / 100,
+      formaPagamento: ids.map((i) => nomes.get(i) ?? "").filter(Boolean).join(" + "),
+      prazoEntrega: datas[0] ?? dataBr(p.dataEntregaPadrao),
+    };
+  }
+
+  /** Dados do pedido para preencher o formulário: valor e forma de pagamento vêm do pedido de venda da Nomus. */
+  async detalhe(numero: number): Promise<DetalheDoPedido> {
+    if (!Number.isInteger(numero) || numero <= 0) throw new ErroProblematicos("Número de pedido inválido.");
+    const local = this.db.prepare("SELECT nomus_id, cliente_nome FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
+
+    let nomus: DetalheDoPedido | null = null;
+    let erro: string | null = null;
+    try {
+      nomus = await this.buscarNaNomus(numero);
+    } catch (e) {
+      erro = e instanceof Error ? e.message : String(e);
+    }
+    if (nomus) return { ...nomus, cliente: nomus.cliente || (local?.cliente_nome as string) || "", origem: local ? "pcp" : "nomus" };
+    if (local) return { numero, nomusId: local.nomus_id as number, cliente: local.cliente_nome as string, origem: "pcp", valor: null, formaPagamento: "", prazoEntrega: null };
+    throw new ErroProblematicos(erro ? `Não foi possível consultar a Nomus: ${erro}` : `Pedido ${numero} não encontrado.`, erro ? 502 : 404);
+  }
+
+  // ------------------------------------------------------------ CRUD das três tabelas
+
+  private paraSaida(tipo: TipoProblematico, l: Linha) {
+    const saida: Record<string, unknown> = {
+      id: l.id as number,
+      numeroPedido: l.numero_pedido as number,
+      cliente: l.cliente_nome as string,
+      criadoEm: l.created_at as string,
+      atualizadoEm: l.updated_at as string,
+      atualizadoPor: l.updated_by as string,
+    };
+    for (const c of TABELAS[tipo].campos) {
+      const v = l[c.coluna];
+      saida[c.chave] = c.tipo === "dinheiro" ? (v === null || v === undefined ? null : (v as number) / 100) : (v ?? (c.tipo === "data" ? null : ""));
+    }
+    return saida;
+  }
+
+  listar() {
+    const lista = (tipo: TipoProblematico) =>
+      (this.db.prepare(`SELECT * FROM ${TABELAS[tipo].tabela} ORDER BY id DESC`).all() as Linha[]).map((l) => this.paraSaida(tipo, l));
+    return { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
+  }
+
+  private validarCampos(tipo: TipoProblematico, corpo: Record<string, unknown>, parcial: boolean): Record<string, unknown> {
+    const valores: Record<string, unknown> = {};
+    for (const c of TABELAS[tipo].campos) {
+      if (!(c.chave in corpo)) {
+        if (!parcial && c.obrigatorio) throw new ErroProblematicos(`Informe ${rotulo(c.chave)}.`);
+        continue;
+      }
+      const v = corpo[c.chave];
+      if (c.tipo === "data") {
+        if (v === null || v === "") {
+          if (c.obrigatorio) throw new ErroProblematicos(`Informe ${rotulo(c.chave)}.`);
+          valores[c.coluna] = null;
+        } else if (typeof v === "string" && isDataPlausivel(v)) valores[c.coluna] = v;
+        else throw new ErroProblematicos(`${rotulo(c.chave)} deve ser uma data válida (AAAA-MM-DD).`);
+      } else if (c.tipo === "dinheiro") {
+        if (v === null || v === "") valores[c.coluna] = null;
+        else if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100_000_000) valores[c.coluna] = Math.round(v * 100);
+        else throw new ErroProblematicos("Valor inválido.");
+      } else {
+        const t = limpar(v);
+        if (c.obrigatorio && t === "") throw new ErroProblematicos(`Informe ${rotulo(c.chave)}.`);
+        if (t.length > (c.max ?? 200)) throw new ErroProblematicos(`${rotulo(c.chave)} passa de ${c.max} caracteres.`);
+        valores[c.coluna] = t;
+      }
+    }
+    return valores;
+  }
+
+  /** Cria o registro. Em devoluções, forma de pagamento e valor não informados são preenchidos pelo pedido de venda. */
+  async criar(tipo: TipoProblematico, corpo: Record<string, unknown>, usuario: string): Promise<number> {
+    const numero = corpo.numeroPedido;
+    if (typeof numero !== "number" || !Number.isInteger(numero) || numero <= 0) throw new ErroProblematicos("Informe o número do pedido.");
+
+    const entrada = { ...corpo };
+    let cliente = limpar(corpo.cliente).slice(0, 120);
+    if (tipo === "devolucoes" && (!("formaPagamento" in entrada) || !("valor" in entrada) || !cliente)) {
+      const d = await this.detalhe(numero).catch(() => null);
+      if (d) {
+        if (!("formaPagamento" in entrada)) entrada.formaPagamento = d.formaPagamento;
+        if (!("valor" in entrada)) entrada.valor = d.valor;
+        cliente = cliente || d.cliente;
+      }
+    }
+    if (!cliente) {
+      const local = this.db.prepare("SELECT cliente_nome FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
+      cliente = (local?.cliente_nome as string) ?? "";
+    }
+
+    const valores = this.validarCampos(tipo, entrada, false);
+    const agora = this.agora().toISOString();
+    const t = TABELAS[tipo];
+    const colunas = ["numero_pedido", "cliente_nome", ...Object.keys(valores), "created_at", "updated_at", "updated_by"];
+    const r = this.db
+      .prepare(`INSERT INTO ${t.tabela} (${colunas.join(", ")}) VALUES (${colunas.map(() => "?").join(", ")})`)
+      .run(...([numero, cliente, ...Object.values(valores), agora, agora, usuario] as never[]));
+    return Number(r.lastInsertRowid);
+  }
+
+  editar(tipo: TipoProblematico, id: number, corpo: Record<string, unknown>, usuario: string): void {
+    const t = TABELAS[tipo];
+    if (!this.db.prepare(`SELECT 1 FROM ${t.tabela} WHERE id = ?`).get(id)) throw new ErroProblematicos("Registro não encontrado.", 404);
+    const valores = this.validarCampos(tipo, corpo, true);
+    if ("numeroPedido" in corpo) {
+      const n = corpo.numeroPedido;
+      if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) throw new ErroProblematicos("Número de pedido inválido.");
+      valores.numero_pedido = n;
+    }
+    if (Object.keys(valores).length === 0) throw new ErroProblematicos("Informe ao menos um campo para atualizar.");
+    const sets = Object.keys(valores).map((c) => `${c} = ?`);
+    inTransaction(this.db, () =>
+      this.db.prepare(`UPDATE ${t.tabela} SET ${sets.join(", ")}, updated_at = ?, updated_by = ? WHERE id = ?`).run(...([...Object.values(valores), this.agora().toISOString(), usuario, id] as never[]))
+    );
+  }
+
+  remover(tipo: TipoProblematico, id: number): void {
+    const r = this.db.prepare(`DELETE FROM ${TABELAS[tipo].tabela} WHERE id = ?`).run(id);
+    if (Number(r.changes) === 0) throw new ErroProblematicos("Registro não encontrado.", 404);
+  }
+}
+
+const rotulo = (chave: string) =>
+  ({ dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;

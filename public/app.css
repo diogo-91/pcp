@@ -104,3 +104,27 @@
 .problemas i{font-style:normal;font-size:10px;line-height:1.3;color:#8f2b36;white-space:normal}
 .tablewrap td[data-celula=alerta]{vertical-align:top;padding-top:8px}
 @media(max-width:760px){.btn-problemas{width:100%;justify-content:center}}
+
+/* Painel "Pedidos Problemáticos" (3 tabelas) */
+.pb-dialog{width:min(1040px,95vw)}
+.pb-corpo{padding:14px 20px 20px;max-height:calc(90vh - 70px);overflow:auto}
+.pb-filtro{margin-bottom:10px;padding:8px 10px;background:#fff5f6;border:1px solid #f0c7cb;border-radius:9px;color:#8f2b36;white-space:normal}
+.pb-abas{margin:0 0 14px}
+.pb-n{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;padding:0 5px;border-radius:9px;background:#edf1f5;color:#40566b;font-size:10px;font-weight:800;margin-left:4px}
+.pb-n:empty{display:none}
+.pb-form{display:grid;grid-template-columns:minmax(260px,1.4fr) repeat(auto-fit,minmax(150px,1fr)) auto;gap:10px;align-items:end}
+.pb-busca-campo{position:relative}
+.pb-res{position:absolute;z-index:40;top:100%;left:0;right:0;margin:3px 0 0;padding:4px;list-style:none;background:#fff;border:1px solid #dce4ec;border-radius:10px;box-shadow:0 10px 30px #1524341f;max-height:260px;overflow:auto}
+.pb-res[hidden]{display:none}
+.pb-res button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;font-size:12.5px;color:#26394e}
+.pb-res button:hover,.pb-res button:focus{background:#fff6d6;outline:0}
+.pb-res em{font-style:normal;font-size:10px;color:#2f5c96;background:#e5eefb;border-radius:4px;padding:0 5px;margin-left:4px}
+.pb-nada{padding:9px 10px;font-size:12px;color:#8a9aab}
+.pb-chip{display:inline-flex;align-items:center;gap:6px;background:#fff7dc;border:1px solid #f0d98b;color:#6f4b00;border-radius:9px;padding:8px 6px 8px 11px;font-size:12.5px}
+.pb-chip button{border:0;background:none;width:22px;height:22px;border-radius:50%;font-size:16px;line-height:1;color:#8a5a00}
+.pb-chip button:hover{background:#f0d98b}
+.pb-erro{min-height:18px;margin:6px 2px;font-size:12px;color:#b23a47;font-weight:650}
+.pb-tabela td{padding:6px 10px}
+.pb-tabela .pg-in{width:100%;min-width:140px}
+.pb-acoes{width:80px;text-align:right}
+@media(max-width:760px){.pb-form{grid-template-columns:1fr}}

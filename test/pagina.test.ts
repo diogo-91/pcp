@@ -61,7 +61,7 @@ test("GET / e /index.html servem a tela versionada, sem cache e SEM exigir o có
     assert.equal(r.statusCode, 200, url);
     assert.match(String(r.headers["content-type"]), /text\/html/);
     assert.equal(r.headers["cache-control"], "no-cache");
-    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "programacao-extras.js", "programacao.css", "programacao.js", "style.css"], url);
+    assert.deepEqual(Object.keys(versoes(r.body)).sort(), ["app.css", "app.js", "problematicos.js", "programacao-extras.js", "programacao.css", "programacao.js", "style.css"], url);
   }
 });
 

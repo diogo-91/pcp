@@ -684,10 +684,15 @@ document.querySelectorAll('.stat').forEach((el) =>
   })
 );
 
-$('btn-problemas').addEventListener('click', () => {
-  estado.soProblematicos = !estado.soProblematicos;
-  renderTabela();
-});
+// O botão abre o painel de registros (urgentes, devoluções, clientes/defeitos): problematicos.js.
+$('btn-problemas').addEventListener('click', () => window.PCP.problematicos?.abrir?.());
+
+// O filtro "só pedidos com alerta automático" (o antigo comportamento do botão) agora fica dentro do painel.
+window.PCP_TABELA = {
+  get soAlertas() { return estado.soProblematicos; },
+  get contagem() { return estado.problematicos; },
+  definirSoAlertas(ligado) { estado.soProblematicos = ligado; renderTabela(); },
+};
 
 $('busca').addEventListener('input', (e) => {
   estado.busca = e.target.value;
@@ -706,6 +711,6 @@ setInterval(() => {
 }, 60_000);
 
 // Peças que o módulo Programação (programacao.js) reaproveita: mesmo token, mesmos avisos.
-window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario };
+window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario, tabela: window.PCP_TABELA };
 
 carregar();
