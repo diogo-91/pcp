@@ -178,11 +178,14 @@ export function mascararTelefone(digitos: string): string {
   return digitos;
 }
 
-/** "1.452,00" -> 145200 (centavos). Inválido -> null. */
+/**
+ * Dinheiro como a Nomus escreve -> centavos. Formato brasileiro: o ponto é SEMPRE separador de milhar e a vírgula é o
+ * decimal ("1.452,00" = 1452; "1.320" = 1320, e não 1,32; "726" = 726). Inválido -> null.
+ */
 export function reaisParaCentavos(texto: string | null | undefined): number | null {
   const t = String(texto ?? "").trim();
   if (!t) return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  const n = Number(t.replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 

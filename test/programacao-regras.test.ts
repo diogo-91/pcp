@@ -204,6 +204,9 @@ test("telefone: só dígitos, sem o 55, e máscara", () => {
 test("valor em reais brasileiros vira centavos", () => {
   assert.equal(reaisParaCentavos("1.452,00"), 145200);
   assert.equal(reaisParaCentavos("37698"), 3769800);
+  assert.equal(reaisParaCentavos("1.320"), 132000, "ponto é milhar, não decimal");
+  assert.equal(reaisParaCentavos("726"), 72600);
+  assert.equal(reaisParaCentavos("4.400,00"), 440000);
   assert.equal(reaisParaCentavos(""), null);
   assert.equal(reaisParaCentavos("abc"), null);
 });

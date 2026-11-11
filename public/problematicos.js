@@ -100,7 +100,12 @@ function dicaDaAba() {
   if (s.carregando) return 'Buscando os dados do pedido na Nomus… (pode levar alguns segundos)';
   if (s.aviso) return `<span class="pb-aviso">${esc(s.aviso)}</span> <button type="button" class="pg-mini" data-tentar="${s.numero}">Tentar de novo</button>`;
   if (P.aba === 'urgentes' && s.prazoEntrega) return `Prazo de entrega atual do pedido: ${esc(fmtData(s.prazoEntrega))}.`;
-  if (P.aba === 'devolucoes' && s.preenchido) return 'Forma de pagamento e valor preenchidos com os dados do pedido de venda da Nomus.';
+  if (P.aba === 'devolucoes' && s.preenchido) {
+    const dividido = s.valorTotal && s.valor !== null && Math.abs(s.valorTotal - s.valor) > 0.005;
+    return dividido
+      ? `Forma de pagamento preenchida pelo pedido de venda. O valor é o da <b>entrada</b> (${esc(brl(s.valor))}); o total do pedido é ${esc(brl(s.valorTotal))}.`
+      : 'Forma de pagamento e valor (pago de uma vez) preenchidos com os dados do pedido de venda da Nomus.';
+  }
   return '';
 }
 
@@ -145,7 +150,7 @@ async function escolher(numero, cliente) {
   try {
     const d = await api(`/api/problematicos/pedidos/${numero}`);
     if (!P.sel[aba] || P.sel[aba].numero !== numero) return;
-    P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false, aviso: d.aviso || '' };
+    P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false, aviso: d.aviso || '', valor: d.valor, valorTotal: d.valorTotal };
     renderPainel();
     // Devolução: forma de pagamento e valor saem do pedido de venda.
     if (aba === 'devolucoes' && P.aba === aba) {

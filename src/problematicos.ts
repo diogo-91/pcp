@@ -54,9 +54,11 @@ export interface PedidoEncontrado {
 }
 
 export interface DetalheDoPedido extends PedidoEncontrado {
+  /** Total do pedido de venda, em reais (só referência: o campo `valor` é o que foi pago agora). */
+  valorTotal?: number | null;
   /** Preenchido quando a Nomus não respondeu a tempo: explica o que está faltando ou desatualizado. */
   aviso?: string;
-  /** Valor total do pedido de venda, em reais. */
+  /** Valor pago de uma vez: o da ENTRADA quando o pagamento é dividido, ou o total quando é pagamento único. Em reais. */
   valor: number | null;
   /** Forma(s) de pagamento do pedido de venda, ex.: "Pix" ou "Pix + Cartão de Crédito". */
   formaPagamento: string;
@@ -95,6 +97,14 @@ export function descreverPagamento(p: NomusPedido, nomes: Map<number, string>): 
     return `${titulo}: ${forma}${centavos === null ? "" : ` ${brl(centavos)}`}`;
   });
   return partes.join(" + ");
+}
+
+/** Valor "pago agora": entrada (parcela rotulada "entrada", ou a primeira) quando há mais de uma parcela; senão o total. */
+export function valorPagoAgora(p: NomusPedido, totalCentavos: number | null): number | null {
+  const parcelas = p.parcelas ?? [];
+  if (parcelas.length <= 1) return totalCentavos;
+  const entrada = parcelas.find((x) => limpar(x.observacao).toLowerCase().startsWith("entrada")) ?? parcelas[0];
+  return reaisParaCentavos(entrada.valorParcela) ?? totalCentavos;
 }
 
 const codigoDoPedido = (numero: number) => `PD ${String(numero).padStart(5, "0")}`;
@@ -171,7 +181,8 @@ export class ProblematicosService {
       nomusId: p.id,
       cliente,
       origem: "nomus",
-      valor: centavos === null ? null : centavos / 100,
+      valor: ((): number | null => { const v = valorPagoAgora(p, centavos); return v === null ? null : v / 100; })(),
+      valorTotal: centavos === null ? null : centavos / 100,
       formaPagamento,
       prazoEntrega: datas[0] ?? dataBr(p.dataEntregaPadrao),
     };
@@ -210,6 +221,7 @@ export class ProblematicosService {
       cliente,
       origem: "pcp",
       valor: valorCentavos === null ? null : valorCentavos / 100,
+      valorTotal: prog?.valor_centavos == null ? null : (prog.valor_centavos as number) / 100,
       formaPagamento: forma,
       prazoEntrega: (copia?.prazo_entrega as string | null | undefined) ?? null,
       aviso: copia

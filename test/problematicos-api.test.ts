@@ -66,7 +66,8 @@ test("número exato que o PCP não tem (pedido antigo) é achado na Nomus", asyn
 test("detalhe do pedido traz valor e forma(s) de pagamento do pedido de venda", async () => {
   const { app } = await montar();
   const d = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1744" })).json() as Record<string, unknown>;
-  assert.equal(d.valor, 5587.2);
+  assert.equal(d.valor, 726, "o valor é o da entrada");
+  assert.equal(d.valorTotal, 5587.2, "o total do pedido vem à parte");
   assert.equal(d.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20", "entrada e entrega, cada uma com a forma e o valor");
   assert.equal(d.cliente, "Paulo de Lima Costa");
   assert.equal(d.prazoEntrega, "2026-10-08");
@@ -105,7 +106,7 @@ test("tabela 2: devolução se preenche sozinha (forma de pagamento e valor) ao 
   assert.equal(r.statusCode, 201);
   const d = (r.json() as { devolucoes: Array<Record<string, unknown>> }).devolucoes[0];
   assert.equal(d.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20");
-  assert.equal(d.valor, 5587.2);
+  assert.equal(d.valor, 726, "devolução: valor = entrada");
   assert.equal(d.cliente, "Paulo de Lima Costa");
 
   // o que a pessoa digitar vale mais que o automático
@@ -171,7 +172,7 @@ test("Nomus lenta: não trava; usa a última cópia (ou o valor do PCP) e avisa;
   // agora a Nomus cai de vez: a tela ainda recebe o último valor e a forma de pagamento
   nomus.get = async () => { throw new Error("Nomus fora do ar"); };
   const copia = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/1744" })).json() as Record<string, unknown>;
-  assert.equal(copia.valor, 5587.2);
+  assert.equal(copia.valor, 726);
   assert.equal(copia.formaPagamento, "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20");
   assert.match(String(copia.aviso), /última consulta/);
   assert.ok(servico);
@@ -181,6 +182,7 @@ test("forma de pagamento: uma parcela só mostra o nome; várias mostram entrada
   const { app, nomus } = await montar();
   const unica = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/500" })).json() as Record<string, unknown>;
   assert.equal(unica.formaPagamento, "Cartão de Crédito", "uma parcela: só o nome da forma");
+  assert.equal(unica.valor, 100, "pagamento único: o valor é o total");
 
   const original = nomus.get.bind(nomus);
   nomus.get = async <T,>(c: string): Promise<T> => {
@@ -197,4 +199,20 @@ test("forma de pagamento: uma parcela só mostra o nome; várias mostram entrada
   const longa = "Entrada: Pix R$ 726,00 + Entrega: Cartão de Crédito R$ 4.861,20 + Parcela 3: Boleto Bancário R$ 1.000,00 + Parcela 4: Cheque R$ 500,00";
   const r = await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1744, formaPagamento: longa, valor: 10 } });
   assert.equal(r.statusCode, 201);
+});
+
+test("valores da Nomus com ponto de milhar e sem decimais ('1.320') não viram R$ 1,32", async () => {
+  const { app, nomus } = await montar();
+  const original = nomus.get.bind(nomus);
+  nomus.get = async <T,>(c: string): Promise<T> => {
+    if (c.startsWith("/pedidos?query=") && decodeURIComponent(c).includes("PD 02262")) {
+      return [{ id: 2300, codigoPedido: "PD 02262", idPessoaCliente: 1, idFormaPagamento: 13, valorTotal: "4.400,00",
+        parcelas: [{ idFormaPagamento: 13, observacao: "ENTRADA ", valorParcela: "1.320" }, { idFormaPagamento: 13, observacao: "ENTREGA", valorParcela: "3.080" }] }] as T;
+    }
+    return original<T>(c);
+  };
+  const d = (await app.inject({ method: "GET", url: "/api/problematicos/pedidos/2262" })).json() as Record<string, unknown>;
+  assert.equal(d.formaPagamento, "Entrada: Pix R$ 1.320,00 + Entrega: Pix R$ 3.080,00");
+  assert.equal(d.valor, 1320, "valor = entrada");
+  assert.equal(d.valorTotal, 4400);
 });
