@@ -8,11 +8,17 @@ const { api, esc, fmtData, $, mostrarToast } = window.PCP;
 
 const brl = (n) => (n === null || n === undefined ? '' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
+// Todo registro nasce "Não realizada"; ao marcar "Realizada" ele some da tela (continua gravado).
+const STATUS = { k: 'status', rotulo: 'Status', tipo: 'status' };
+const NOMES_STATUS = { NAO_REALIZADA: 'Não realizada', REALIZADA: 'Realizada' };
+const statusSelect = (id, atual, extra = '') =>
+  `<select ${id} class="pg-in pb-st pb-st-${atual}" ${extra}>${Object.entries(NOMES_STATUS).map(([v, n]) => `<option value="${v}"${v === atual ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+
 const TABELAS = {
   urgentes: {
     titulo: 'Pedidos Urgentes',
     vazio: 'Nenhum pedido urgente cadastrado.',
-    campos: [{ k: 'dataEntregaCombinada', rotulo: 'Data de entrega combinada', tipo: 'date', obrigatorio: true }],
+    campos: [{ k: 'dataEntregaCombinada', rotulo: 'Data de entrega combinada', tipo: 'date', obrigatorio: true }, STATUS],
   },
   devolucoes: {
     titulo: 'Pedidos de Devolução',
@@ -20,6 +26,7 @@ const TABELAS = {
     campos: [
       { k: 'formaPagamento', rotulo: 'Forma de pagamento', tipo: 'text', max: 300 },
       { k: 'valor', rotulo: 'Valor da devolução', tipo: 'number' },
+      STATUS,
     ],
   },
   defeitos: {
@@ -28,11 +35,12 @@ const TABELAS = {
     campos: [
       { k: 'causa', rotulo: 'Causa', tipo: 'text', max: 500, obrigatorio: true },
       { k: 'motorista', rotulo: 'Motorista', tipo: 'text', max: 100 },
+      STATUS,
     ],
   },
 };
 
-const P = { aba: 'urgentes', dados: { urgentes: [], devolucoes: [], defeitos: [] }, sel: { urgentes: null, devolucoes: null, defeitos: null }, timer: null, carregou: false };
+const P = { mostrarRealizadas: false, aba: 'urgentes', dados: { urgentes: [], devolucoes: [], defeitos: [] }, sel: { urgentes: null, devolucoes: null, defeitos: null }, timer: null, carregou: false };
 
 // ---------------------------------------------------------------- estrutura do painel
 
@@ -51,17 +59,21 @@ function renderPainel() {
   document.querySelectorAll('#pb-painel [id^="pb-f-"]').forEach((el) => { digitado[el.id] = el.value; });
 
   const t = TABELAS[P.aba];
-  const lista = P.dados[P.aba];
+  const todos = P.dados[P.aba];
+  const realizadas = todos.filter((r) => r.status === 'REALIZADA').length;
+  const lista = P.mostrarRealizadas ? todos : todos.filter((r) => r.status !== 'REALIZADA'); // realizada some da tela
   const sel = P.sel[P.aba];
 
   const campoForm = (c) =>
-    `<div class="pg-campo"><label>${esc(c.rotulo)}${c.obrigatorio ? ' *' : ''}</label><input id="pb-f-${c.k}" type="${c.tipo}" ${c.tipo === 'number' ? 'min="0" step="0.01" placeholder="0,00"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''}></div>`;
+    c.tipo === 'status'
+      ? `<div class="pg-campo"><label>${esc(c.rotulo)}</label>${statusSelect('id="pb-f-status"', 'NAO_REALIZADA')}</div>`
+      : `<div class="pg-campo"><label>${esc(c.rotulo)}${c.obrigatorio ? ' *' : ''}</label><input id="pb-f-${c.k}" type="${c.tipo}" ${c.tipo === 'number' ? 'min="0" step="0.01" placeholder="0,00"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''}></div>`;
 
   const linhas = lista
     .map(
       (r) => `<tr data-id="${r.id}">
         <td><b>${r.numeroPedido}</b>${r.cliente ? `<span class="pg-sub">${esc(r.cliente)}</span>` : ''}</td>
-        ${t.campos.map((c) => `<td><input class="pg-in" type="${c.tipo}" data-campo="${c.k}" value="${esc(r[c.k] ?? '')}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"></td>`).join('')}
+        ${t.campos.map((c) => (c.tipo === 'status' ? `<td>${statusSelect(`data-campo="status"`, r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td>` : `<td><input class="pg-in" type="${c.tipo}" data-campo="${c.k}" value="${esc(r[c.k] ?? '')}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"></td>`)).join('')}
         <td class="pb-acoes"><button type="button" class="pg-mini" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">Excluir</button></td></tr>`
     )
     .join('');
@@ -78,16 +90,18 @@ function renderPainel() {
     </div>
     <div class="pg-sub" id="pb-dica" style="padding:4px 2px 0">${dicaDaAba()}</div>
     <div class="pb-erro" id="pb-erro" role="alert"></div>
+    <label class="pg-check pb-mostrar"><input type="checkbox" id="pb-mostrar"${P.mostrarRealizadas ? ' checked' : ''}> Mostrar realizadas (${realizadas})</label>
     <div class="pg-wrap" style="max-height:340px"><table class="pg-tabela pb-tabela">
       <thead><tr><th>Número do pedido</th>${t.campos.map((c) => `<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr></thead>
-      <tbody>${linhas || `<tr><td colspan="${t.campos.length + 2}" class="pg-vazio">${esc(t.vazio)}</td></tr>`}</tbody></table></div>`;
+      <tbody>${linhas || `<tr><td colspan="${t.campos.length + 2}" class="pg-vazio">${esc(todos.length && !lista.length ? 'Nenhum pedido pendente: as realizadas estão ocultas (marque “Mostrar realizadas”).' : t.vazio)}</td></tr>`}</tbody></table></div>`;
 
   for (const [id, v] of Object.entries(digitado)) if (v !== '' && $(id)) $(id).value = v;
 
   document.querySelectorAll('#pb-abas [data-aba]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.aba === P.aba)));
   for (const k of Object.keys(TABELAS)) {
     const el = document.querySelector(`[data-n="${k}"]`);
-    if (el) el.textContent = P.dados[k].length ? String(P.dados[k].length) : '';
+    const pendentes = P.dados[k].filter((r) => r.status !== 'REALIZADA').length; // o número mostra só o que falta fazer
+    if (el) el.textContent = pendentes ? String(pendentes) : '';
   }
 }
 
@@ -186,7 +200,7 @@ async function adicionar() {
     P.dados = { urgentes: r.urgentes, devolucoes: r.devolucoes, defeitos: r.defeitos };
     P.sel[P.aba] = null;
     renderPainel();
-    mostrarToast(`Pedido ${sel.numero} cadastrado em ${t.titulo}.`);
+    mostrarToast(corpo.status === 'REALIZADA' ? `Pedido ${sel.numero} cadastrado como realizada: oculto da tela.` : `Pedido ${sel.numero} cadastrado em ${t.titulo}.`);
   } catch (e) {
     erro(e.message);
   }
@@ -205,6 +219,19 @@ async function salvarLinha(el) {
     const r = await api(`/api/problematicos/${P.aba}/${id}`, { method: 'PATCH', body: JSON.stringify({ [c.k]: v }) });
     P.dados = r;
     el.classList.remove('erro');
+    if (c.k === 'status') {
+      const aba = P.aba;
+      const numero = P.dados[aba].find((x) => String(x.id) === id)?.numeroPedido;
+      renderPainel(); // realizada some da lista; voltar a "não realizada" (com a caixa ligada) atualiza a cor
+      if (v === 'REALIZADA' && !P.mostrarRealizadas) {
+        mostrarToast(`Pedido ${numero} marcado como realizada e ocultado.`, async () => {
+          try {
+            P.dados = await api(`/api/problematicos/${aba}/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'NAO_REALIZADA' }) });
+            renderPainel();
+          } catch (e2) { mostrarToast(e2.message); }
+        });
+      }
+    }
   } catch (e) {
     el.classList.add('erro');
     mostrarToast(e.message);
@@ -260,7 +287,8 @@ dlg.addEventListener('keydown', (e) => {
 });
 
 dlg.addEventListener('change', (e) => {
-  if (e.target.matches('.pb-tabela input[data-campo]')) salvarLinha(e.target);
+  if (e.target.id === 'pb-mostrar') { P.mostrarRealizadas = e.target.checked; return renderPainel(); }
+  if (e.target.matches('.pb-tabela [data-campo]')) salvarLinha(e.target);
 });
 
 $('pb-voltar').addEventListener('click', () => window.PCP.mostrarView('tabela'));

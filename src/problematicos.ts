@@ -21,19 +21,26 @@ export type TipoProblematico = (typeof TIPOS_PROBLEMATICOS)[number];
 interface CampoDef {
   chave: string;
   coluna: string;
-  tipo: "data" | "texto" | "dinheiro";
+  tipo: "data" | "texto" | "dinheiro" | "status";
   max?: number;
   obrigatorio?: boolean;
 }
 
 /** As três tabelas do botão "Pedidos Problemáticos": o número do pedido é comum; o resto muda. */
 const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> = {
-  urgentes: { tabela: "pcp_urgente", campos: [{ chave: "dataEntregaCombinada", coluna: "data_entrega_combinada", tipo: "data", obrigatorio: true }] },
+  urgentes: {
+    tabela: "pcp_urgente",
+    campos: [
+      { chave: "dataEntregaCombinada", coluna: "data_entrega_combinada", tipo: "data", obrigatorio: true },
+      { chave: "status", coluna: "status", tipo: "status" },
+    ],
+  },
   devolucoes: {
     tabela: "pcp_devolucao",
     campos: [
       { chave: "formaPagamento", coluna: "forma_pagamento", tipo: "texto", max: 300 },
       { chave: "valor", coluna: "valor_centavos", tipo: "dinheiro" },
+      { chave: "status", coluna: "status", tipo: "status" },
     ],
   },
   defeitos: {
@@ -41,9 +48,12 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
     campos: [
       { chave: "causa", coluna: "causa", tipo: "texto", max: 500, obrigatorio: true },
       { chave: "motorista", coluna: "motorista", tipo: "texto", max: 100 },
+      { chave: "status", coluna: "status", tipo: "status" },
     ],
   },
 };
+
+export const STATUS_PROBLEMATICO = ["NAO_REALIZADA", "REALIZADA"] as const;
 
 export interface PedidoEncontrado {
   numero: number;
@@ -288,6 +298,9 @@ export class ProblematicosService {
           valores[c.coluna] = null;
         } else if (typeof v === "string" && isDataPlausivel(v)) valores[c.coluna] = v;
         else throw new ErroProblematicos(`${rotulo(c.chave)} deve ser uma data válida (AAAA-MM-DD).`);
+      } else if (c.tipo === "status") {
+        if (typeof v !== "string" || !(STATUS_PROBLEMATICO as readonly string[]).includes(v)) throw new ErroProblematicos("Status inválido: use REALIZADA ou NAO_REALIZADA.");
+        valores[c.coluna] = v;
       } else if (c.tipo === "dinheiro") {
         if (v === null || v === "") valores[c.coluna] = null;
         else if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100_000_000) valores[c.coluna] = Math.round(v * 100);
@@ -355,4 +368,4 @@ export class ProblematicosService {
 }
 
 const rotulo = (chave: string) =>
-  ({ dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;
+  ({ status: "o status", dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;

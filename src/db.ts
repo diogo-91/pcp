@@ -326,6 +326,12 @@ const MIGRATIONS: string[] = [
     atualizado_em   TEXT NOT NULL
   );
   `,
+  // Status das três tabelas de Pedidos Problemáticos: nasce "não realizada"; ao marcar "realizada" some da tela (continua gravado).
+  `
+  ALTER TABLE pcp_urgente ADD COLUMN status TEXT NOT NULL DEFAULT 'NAO_REALIZADA';
+  ALTER TABLE pcp_devolucao ADD COLUMN status TEXT NOT NULL DEFAULT 'NAO_REALIZADA';
+  ALTER TABLE pcp_defeito ADD COLUMN status TEXT NOT NULL DEFAULT 'NAO_REALIZADA';
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

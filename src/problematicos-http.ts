@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ErroProblematicos, TIPOS_PROBLEMATICOS, type ProblematicosService, type TipoProblematico } from "./problematicos";
 
 const CAMPOS: Record<TipoProblematico, string[]> = {
-  urgentes: ["numeroPedido", "cliente", "dataEntregaCombinada"],
-  devolucoes: ["numeroPedido", "cliente", "formaPagamento", "valor"],
-  defeitos: ["numeroPedido", "cliente", "causa", "motorista"],
+  urgentes: ["numeroPedido", "cliente", "dataEntregaCombinada", "status"],
+  devolucoes: ["numeroPedido", "cliente", "formaPagamento", "valor", "status"],
+  defeitos: ["numeroPedido", "cliente", "causa", "motorista", "status"],
 };
 
 /** Copia só os campos permitidos do corpo (vem do navegador). */

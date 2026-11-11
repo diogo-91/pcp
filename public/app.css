@@ -122,3 +122,9 @@
 @media(max-width:760px){.pb-form{grid-template-columns:1fr}}
 .pb-aviso{color:#9a5b12;font-weight:650}
 .pb-tabela input[data-campo=formaPagamento]{min-width:340px}
+
+/* Status das tabelas de Pedidos Problemáticos */
+.pb-st{font-weight:750;width:auto;min-width:130px;border-color:transparent}
+.pb-st-NAO_REALIZADA{background:#fff2d6;color:#936711}
+.pb-st-REALIZADA{background:#e8f7ed;color:#257a4d}
+.pb-mostrar{margin:2px 2px 8px;font-size:12px}

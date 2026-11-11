@@ -216,3 +216,25 @@ test("valores da Nomus com ponto de milhar e sem decimais ('1.320') não viram R
   assert.equal(d.valor, 1320, "valor = entrada");
   assert.equal(d.valorTotal, 4400);
 });
+
+test("status: todo registro nasce NAO_REALIZADA; dá para marcar REALIZADA e voltar; valor inválido é recusado", async () => {
+  const { app } = await montar();
+  for (const [tipo, corpo] of [
+    ["urgentes", { numeroPedido: 1744, dataEntregaCombinada: "2026-11-20" }],
+    ["devolucoes", { numeroPedido: 1744, formaPagamento: "Pix", valor: 10 }],
+    ["defeitos", { numeroPedido: 1744, causa: "Amassada" }],
+  ] as const) {
+    const criado = await app.inject({ method: "POST", url: `/api/problematicos/${tipo}`, payload: corpo });
+    const lista = (criado.json() as Record<string, Array<{ id: number; status: string }>>)[tipo];
+    assert.equal(lista[0].status, "NAO_REALIZADA", `${tipo}: nasce não realizada`);
+
+    const feito = await app.inject({ method: "PATCH", url: `/api/problematicos/${tipo}/${lista[0].id}`, payload: { status: "REALIZADA" } });
+    assert.equal((feito.json() as Record<string, Array<{ status: string }>>)[tipo][0].status, "REALIZADA", `${tipo}: marcada como realizada`);
+    const volta = await app.inject({ method: "PATCH", url: `/api/problematicos/${tipo}/${lista[0].id}`, payload: { status: "NAO_REALIZADA" } });
+    assert.equal((volta.json() as Record<string, Array<{ status: string }>>)[tipo][0].status, "NAO_REALIZADA");
+    assert.equal((await app.inject({ method: "PATCH", url: `/api/problematicos/${tipo}/${lista[0].id}`, payload: { status: "TALVEZ" } })).statusCode, 400);
+  }
+  // pode nascer já realizada
+  const ja = await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "X", status: "REALIZADA" } });
+  assert.equal((ja.json() as { defeitos: Array<{ status: string }> }).defeitos[0].status, "REALIZADA");
+});
