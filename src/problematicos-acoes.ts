@@ -41,6 +41,8 @@ export interface AcoesDevolucao {
   financeiro: { realizada: "" | "SIM" | "NAO"; data: string | null };
   /** Quantas das 5 etapas já têm alguma coisa preenchida. */
   feitas: number;
+  /** Quando cada etapa foi preenchida/alterada por último (linha do tempo). */
+  datas: Record<"sac" | "vera" | "dirceu" | "decisao" | "financeiro", string | null>;
   atualizadoEm: string | null;
   atualizadoPor: string | null;
 }
@@ -74,7 +76,7 @@ export class AcoesDevolucaoService {
 
   /** Ações em branco (devolução que ainda não tem nada registrado). */
   vazio(): AcoesDevolucao {
-    return { sac: { quem: "", conversa: "", prints: [] }, vera: { conversa: "", prints: [] }, dirceu: { conversa: "", prints: [] }, decisao: "", financeiro: { realizada: "", data: null }, feitas: 0, atualizadoEm: null, atualizadoPor: null };
+    return { sac: { quem: "", conversa: "", prints: [] }, vera: { conversa: "", prints: [] }, dirceu: { conversa: "", prints: [] }, decisao: "", financeiro: { realizada: "", data: null }, feitas: 0, datas: { sac: null, vera: null, dirceu: null, decisao: null, financeiro: null }, atualizadoEm: null, atualizadoPor: null };
   }
 
   obter(id: number): AcoesDevolucao {
@@ -88,6 +90,7 @@ export class AcoesDevolucaoService {
       decisao: (texto("decisao") as AcoesDevolucao["decisao"]) || "",
       financeiro: { realizada: (texto("fin_realizada") as "" | "SIM" | "NAO") || "", data: (a?.fin_data as string | null | undefined) ?? null },
       feitas: 0,
+      datas: { sac: (a?.sac_em as string | null | undefined) ?? null, vera: (a?.vera_em as string | null | undefined) ?? null, dirceu: (a?.dirceu_em as string | null | undefined) ?? null, decisao: (a?.decisao_em as string | null | undefined) ?? null, financeiro: (a?.fin_em as string | null | undefined) ?? null },
       atualizadoEm: (a?.updated_at as string | undefined) ?? null,
       atualizadoPor: (a?.updated_by as string | undefined) ?? null,
     };
@@ -141,8 +144,14 @@ export class AcoesDevolucaoService {
     }
     if (Object.keys(valores).length === 0) throw new ErroProblematicos("Informe ao menos um campo para atualizar.");
 
-    const colunas = Object.keys(valores);
     const agora = this.agora().toISOString();
+    // Carimba a etapa mexida (a linha do tempo mostra quando cada uma foi preenchida).
+    if ("sac_quem" in valores || "sac_conversa" in valores) valores.sac_em = agora;
+    if ("vera_conversa" in valores) valores.vera_em = agora;
+    if ("dirceu_conversa" in valores) valores.dirceu_em = agora;
+    if ("decisao" in valores) valores.decisao_em = agora;
+    if ("fin_realizada" in valores || "fin_data" in valores) valores.fin_em = agora;
+    const colunas = Object.keys(valores);
     inTransaction(this.db, () => {
       this.db
         .prepare(
@@ -170,7 +179,21 @@ export class AcoesDevolucaoService {
     this.db
       .prepare("INSERT INTO pcp_devolucao_print (devolucao_id, etapa, nome, mime, dados, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(id, etapa, nomeLimpo, mime, dados, this.agora().toISOString(), usuario);
+    this.carimbar(id, etapa, usuario);
     return this.obter(id);
+  }
+
+  /** Marca a etapa como mexida agora (usado ao anexar/remover print, que não passa por `salvar`). */
+  private carimbar(id: number, etapa: string, usuario: string): void {
+    const col = ({ sac: "sac_em", vera: "vera_em", dirceu: "dirceu_em" } as Record<string, string>)[etapa];
+    if (!col) return;
+    const agora = this.agora().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO pcp_devolucao_acao (devolucao_id, ${col}, updated_at, updated_by) VALUES (?, ?, ?, ?)
+         ON CONFLICT(devolucao_id) DO UPDATE SET ${col} = excluded.${col}, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+      )
+      .run(id, agora, agora, usuario);
   }
 
   lerPrint(printId: number): { mime: string; nome: string; dados: Buffer } {
@@ -180,9 +203,10 @@ export class AcoesDevolucaoService {
   }
 
   removerPrint(printId: number): AcoesDevolucao {
-    const p = this.db.prepare("SELECT devolucao_id FROM pcp_devolucao_print WHERE id = ?").get(printId) as Linha | undefined;
+    const p = this.db.prepare("SELECT devolucao_id, etapa FROM pcp_devolucao_print WHERE id = ?").get(printId) as Linha | undefined;
     if (!p) throw new ErroProblematicos("Print não encontrado.", 404);
     this.db.prepare("DELETE FROM pcp_devolucao_print WHERE id = ?").run(printId);
+    this.carimbar(p.devolucao_id as number, p.etapa as string, "PCP");
     return this.obter(p.devolucao_id as number);
   }
 
@@ -199,13 +223,15 @@ export interface EtapaResumo {
   feita: boolean;
   /** Texto curto do que foi registrado (aparece ao passar o mouse), ex.: "Cliente quer cancelar". */
   detalhe: string;
+  /** Quando foi preenchida/alterada por último; nulo se ainda não foi. */
+  em: string | null;
 }
 
 const dataBr = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
 
 export function resumirEtapas(a: AcoesDevolucao): EtapaResumo[] {
   const conversa = (t: string, prints: number) => [t ? (t.length > 80 ? `${t.slice(0, 80)}…` : t) : "", prints ? `${prints} print${prints > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
-  return [
+  const lista: Array<Omit<EtapaResumo, "em">> = [
     { chave: "sac", nome: "SAC", feita: !!(a.sac.quem || a.sac.conversa || a.sac.prints.length), detalhe: [a.sac.quem && `Atendeu: ${a.sac.quem}`, conversa(a.sac.conversa, a.sac.prints.length)].filter(Boolean).join(" · ") },
     { chave: "vera", nome: "Vera", feita: !!(a.vera.conversa || a.vera.prints.length), detalhe: conversa(a.vera.conversa, a.vera.prints.length) },
     { chave: "dirceu", nome: "Dirceu", feita: !!(a.dirceu.conversa || a.dirceu.prints.length), detalhe: conversa(a.dirceu.conversa, a.dirceu.prints.length) },
@@ -217,6 +243,7 @@ export function resumirEtapas(a: AcoesDevolucao): EtapaResumo[] {
       detalhe: a.financeiro.realizada === "SIM" ? `Devolução realizada${a.financeiro.data ? ` em ${dataBr(a.financeiro.data)}` : ""}` : a.financeiro.realizada === "NAO" ? "Devolução ainda não realizada" : "",
     },
   ];
+  return lista.map((e) => ({ ...e, em: e.feita ? a.datas[e.chave] : null }));
 }
 
 function contarEtapas(a: AcoesDevolucao): number {

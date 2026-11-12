@@ -328,6 +328,8 @@ test("ações da devolução: etapas salvas aos poucos, contador de etapas e dec
   assert.deepEqual(etapas.map((e) => e.chave), ["sac", "vera", "dirceu", "decisao", "financeiro"]);
   assert.deepEqual(etapas.map((e) => e.feita), [true, true, false, true, true]);
   assert.equal(etapas[3].detalhe, "Mantém o pedido");
+  assert.ok(etapas[0].em && etapas[3].em, "etapas feitas trazem a data em que foram preenchidas");
+  assert.equal(etapas[2].em, null, "etapa não feita não tem data");
   assert.equal(etapas[4].detalhe, "Devolução ainda não realizada");
 });
 

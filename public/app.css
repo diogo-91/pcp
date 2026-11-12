@@ -520,3 +520,16 @@
 .pb-col-cliente{max-width:130px;min-width:90px}
 .pb-listagem .pb-card-topo{gap:10px}
 .pb-ordem{font-size:11px}
+
+.pb-h5-n{margin-left:auto;font-style:normal;font-size:11px;font-weight:800;color:#6b7c8d}
+.pb-linha{list-style:none;margin:0;padding:0;position:relative}
+.pb-linha li{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:10px;padding:0 0 12px}
+.pb-linha li:last-child{padding-bottom:2px}
+.pb-linha li:not(:last-child):before{content:'';position:absolute;left:6px;top:14px;bottom:-2px;width:2px;background:#e3e8ee}
+.pb-linha li.on:not(:last-child):before{background:#9fd8b8}
+.pb-linha i{width:12px;height:12px;margin-top:3px;border-radius:50%;background:#cfd6de;box-shadow:0 0 0 3px #fff;z-index:1}
+.pb-linha li.on i{background:#2fa56f}
+.pb-linha b{display:block;font-size:12.5px;font-weight:800;color:#18283a}
+.pb-linha li:not(.on) b{color:#8a9aab;font-weight:700}
+.pb-linha small{display:block;margin-top:1px;font-size:11.5px;line-height:1.35;color:#7a8897;overflow-wrap:anywhere}
+.pb-linha time{font-size:10.5px;color:#8a9aab;text-align:right;white-space:nowrap;max-width:92px;white-space:normal}

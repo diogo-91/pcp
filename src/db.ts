@@ -363,6 +363,14 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_pcp_devolucao_print ON pcp_devolucao_print (devolucao_id, etapa);
   `,
+  // Quando cada etapa das Ações foi preenchida pela última vez (alimenta a linha do tempo).
+  `
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN sac_em TEXT;
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN vera_em TEXT;
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN dirceu_em TEXT;
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN decisao_em TEXT;
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN fin_em TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

@@ -290,6 +290,14 @@ function etapasHtml(r) {
     <i>${feitas}/5</i></button>`;
 }
 
+/** Linha do tempo das 5 etapas: bolinha verde = preenchida (com a data), cinza = ainda não. */
+function linhaDoTempo(r) {
+  const nomes = { SAC: 'SAC', Vera: 'Vera', Dirceu: 'Dirceu', 'Decisão': 'Decisão', Financeiro: 'Financeiro' };
+  return `<ol class="pb-linha">${(r.etapas || []).map((e) => `<li class="${e.feita ? 'on' : ''}"><i></i>
+    <div><b>${esc(nomes[e.nome] || e.nome)}</b><small>${esc(e.feita ? (e.detalhe || 'Preenchida.') : 'Ainda não preenchida.')}</small></div>
+    <time>${e.em ? esc(quando(e.em).replace(', ', ' às ')) : ''}</time></li>`).join('')}</ol>`;
+}
+
 function celulaFila(c, r) {
   if (c.tipo === 'etapas') return pontosEtapas(r);
   const v = r[c.k];
@@ -368,7 +376,7 @@ function renderDetalhe() {
         <div><span>Categoria</span><b class="pb-chip-cat">${esc(t.aba.replace('Pedidos ', ''))}</b></div>
       </div>
       <div class="pb-det-campos">${t.campos.map((c) => campoDetalhe(c, r)).join('')}</div>
-      ${P.aba === 'devolucoes' ? `<div class="pb-det-sec"><h5>Etapas do atendimento</h5>${etapasHtml(r)}</div>` : ''}
+      ${P.aba === 'devolucoes' ? `<div class="pb-det-sec"><h5>${ICONE.relogio} Etapas do atendimento <i class="pb-h5-n">${r.etapasFeitas || 0}/5</i></h5>${linhaDoTempo(r)}</div>` : ''}
       <div class="pb-det-sec"><h5>${ICONE.relogio} Histórico</h5>
         <ul class="pb-hist"><li><i class="on"></i><div><b>Cadastrado</b><small>${esc(quando(r.criadoEm))}</small></div></li>
           ${r.atualizadoEm && r.atualizadoEm !== r.criadoEm ? `<li><i></i><div><b>Última alteração${r.atualizadoPor ? ` por ${esc(r.atualizadoPor)}` : ''}</b><small>${esc(quando(r.atualizadoEm))}</small></div></li>` : ''}</ul></div>
@@ -812,11 +820,11 @@ const ETAPAS_DETALHE = (d) => {
   const rot = (t, n) => [t ? (t.length > 80 ? `${t.slice(0, 80)}…` : t) : '', n ? `${n} print${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
   const dt = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
   return [
-    { nome: 'SAC', feita: etapaFeita('sac', d), detalhe: [d.sac.quem && `Atendeu: ${d.sac.quem}`, rot(d.sac.conversa, d.sac.prints.length)].filter(Boolean).join(' · ') },
-    { nome: 'Vera', feita: etapaFeita('vera', d), detalhe: rot(d.vera.conversa, d.vera.prints.length) },
-    { nome: 'Dirceu', feita: etapaFeita('dirceu', d), detalhe: rot(d.dirceu.conversa, d.dirceu.prints.length) },
-    { nome: 'Decisão', feita: etapaFeita('decisao', d), detalhe: d.decisao === 'MANTEM' ? 'Mantém o pedido' : d.decisao === 'CANCELAR' ? 'Cliente quer cancelar' : '' },
-    { nome: 'Financeiro', feita: etapaFeita('financeiro', d), detalhe: d.financeiro.realizada === 'SIM' ? `Devolução realizada${d.financeiro.data ? ` em ${dt(d.financeiro.data)}` : ''}` : d.financeiro.realizada === 'NAO' ? 'Devolução ainda não realizada' : '' },
+    { nome: 'SAC', em: d.datas.sac, feita: etapaFeita('sac', d), detalhe: [d.sac.quem && `Atendeu: ${d.sac.quem}`, rot(d.sac.conversa, d.sac.prints.length)].filter(Boolean).join(' · ') },
+    { nome: 'Vera', em: d.datas.vera, feita: etapaFeita('vera', d), detalhe: rot(d.vera.conversa, d.vera.prints.length) },
+    { nome: 'Dirceu', em: d.datas.dirceu, feita: etapaFeita('dirceu', d), detalhe: rot(d.dirceu.conversa, d.dirceu.prints.length) },
+    { nome: 'Decisão', em: d.datas.decisao, feita: etapaFeita('decisao', d), detalhe: d.decisao === 'MANTEM' ? 'Mantém o pedido' : d.decisao === 'CANCELAR' ? 'Cliente quer cancelar' : '' },
+    { nome: 'Financeiro', em: d.datas.financeiro, feita: etapaFeita('financeiro', d), detalhe: d.financeiro.realizada === 'SIM' ? `Devolução realizada${d.financeiro.data ? ` em ${dt(d.financeiro.data)}` : ''}` : d.financeiro.realizada === 'NAO' ? 'Devolução ainda não realizada' : '' },
   ];
 };
 
