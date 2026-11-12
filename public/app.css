@@ -376,3 +376,44 @@
 .pb-st-NAO_REALIZADA{background:#fff3a8;color:#4a4300}
 .pb-tabela tbody tr:hover td{background:#fffdeb}
 .pb-vazio{background:linear-gradient(180deg,#fffdeb,#fff)}
+
+/* Devoluções > Ações */
+.pb-acoes{width:auto;white-space:nowrap}
+.pb-acoes-btn{display:inline-flex;align-items:center;gap:6px;margin-right:6px;padding:5px 10px;border-radius:10px;border:1px solid #fbc41a;background:#fff6bf;color:#6b4a00;font-size:11px;font-weight:800}
+.pb-acoes-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pb-acoes-btn i{font-style:normal;padding:1px 6px;border-radius:999px;background:#ffd633;color:#2b1d00;font-size:10px}
+.pb-acoes-btn:hover{background:#ffee9a}
+.pb-modal-grande{width:min(640px,95vw)}
+.ac-prog{display:flex;align-items:center;gap:12px;margin:0 20px 4px;font-size:11.5px;font-weight:750;color:#6b7c8d}
+.ac-prog-barra{display:flex;gap:4px;flex:1;max-width:220px}
+.ac-prog-barra i{flex:1;height:6px;border-radius:3px;background:#e7ebf0}
+.ac-prog-barra i.on{background:#fbc41a}
+.ac-lista{padding:4px 20px 6px}
+.ac-etapa{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 0;border-top:1px solid #eef1f5}
+.ac-num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:850;background:#fff6bf;color:#8a5a00;border:1px solid #fbc41a}
+.ac-etapa.feita .ac-num{background:#ffd633;color:#2b1d00;border-color:#fbc41a}
+.ac-corpo h4{margin:3px 0 9px;font-size:13.5px;font-weight:850;color:#18283a}
+.ac-campo{display:block;margin-bottom:9px;font-size:11.5px;font-weight:750;color:#5a6c7e}
+.ac-campo input:not([type=radio]),.ac-campo textarea{display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid #dfe5ec;border-radius:10px;font:inherit;font-size:13px;font-weight:500;color:#18283a;background:#fff;box-sizing:border-box;resize:vertical}
+.ac-campo input[type=date]{width:auto;min-width:170px}
+.ac-campo input:focus,.ac-campo textarea:focus{outline:2px solid #ffd633;outline-offset:0;border-color:#fbc41a}
+.ac-opcoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.ac-opcao{cursor:pointer}
+.ac-opcao input{position:absolute;opacity:0;pointer-events:none}
+.ac-opcao span{display:inline-block;padding:8px 14px;border:1px solid #dfe5ec;border-radius:10px;font-size:12.5px;font-weight:750;color:#40566b;background:#fff}
+.ac-opcao input:checked+span{background:#ffd633;border-color:#fbc41a;color:#2b1d00}
+.ac-opcao input:focus-visible+span{outline:2px solid #fbc41a;outline-offset:2px}
+.ac-anexo{display:flex;align-items:center;gap:10px;margin-top:2px}
+.ac-anexar{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px dashed #fbc41a;border-radius:10px;background:#fffbe3;color:#6b4a00;font-size:12px;font-weight:800;cursor:pointer}
+.ac-anexar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ac-anexar:hover{background:#fff6bf}
+.ac-dica{font-size:11px;color:#8b99a8}
+.ac-prints{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ac-print{position:relative;margin:0;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid #dfe5ec;background:#f4f6f9}
+.ac-print img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block}
+.ac-print-x{position:absolute;top:3px;right:3px;width:20px;height:20px;border:0;border-radius:50%;background:#152434cc;color:#fff;font-size:14px;line-height:1;padding:0}
+.ac-enviando{align-self:center;font-size:11.5px;font-weight:750;color:#8a5a00}
+.ac-rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px 18px;border-top:1px solid #eef1f5}
+.ac-salvo{font-size:11.5px;font-weight:750;color:#6b7c8d}
+.ac-salvo.erro{color:#b23a47}
+.ac-rodape .pb-botao{height:38px;padding:0 18px;font-size:13px}

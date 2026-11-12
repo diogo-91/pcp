@@ -283,3 +283,82 @@ test("indicadores do cartão: pendentes, últimos 7 dias contra os 7 anteriores 
   assert.equal(d.serie.reduce((a, b) => a + b, 0), 4, "o de 25/10 está fora dos 14 dias");
   assert.deepEqual(r.resumo.urgentes, { pendentes: 0, ultimos7: 0, anteriores7: 0, serie: new Array(14).fill(0) });
 });
+
+// ---------------------------------------------------------------- Devoluções > Ações
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]).toString("base64");
+
+async function novaDevolucao(app: Awaited<ReturnType<typeof montar>>["app"]) {
+  const r = await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1750, formaPagamento: "Pix", valor: 100 } });
+  return (r.json() as { id: number }).id;
+}
+
+test("ações da devolução: etapas salvas aos poucos, contador de etapas e decisão/financeiro validados", async () => {
+  const { app } = await montar();
+  const id = await novaDevolucao(app);
+  const url = `/api/problematicos/devolucoes/${id}/acoes`;
+
+  const vazio = (await app.inject({ method: "GET", url })).json() as { feitas: number; decisao: string };
+  assert.equal(vazio.feitas, 0);
+
+  const p1 = (await app.inject({ method: "PUT", url, payload: { sacQuem: "Ana", sacConversa: "Cliente reclamou do prazo" } })).json() as { feitas: number; sac: { quem: string } };
+  assert.equal(p1.sac.quem, "Ana");
+  assert.equal(p1.feitas, 1);
+
+  // Salvar só uma etapa não apaga as outras.
+  const p2 = (await app.inject({ method: "PUT", url, payload: { veraConversa: "Vera ligou de volta", decisao: "MANTEM" } })).json() as { feitas: number; sac: { conversa: string } };
+  assert.equal(p2.sac.conversa, "Cliente reclamou do prazo");
+  assert.equal(p2.feitas, 3);
+
+  assert.equal((await app.inject({ method: "PUT", url, payload: { decisao: "TALVEZ" } })).statusCode, 400);
+  // A data só vale quando a devolução foi realizada.
+  assert.equal((await app.inject({ method: "PUT", url, payload: { finData: "2026-11-10" } })).statusCode, 400);
+  const fin = (await app.inject({ method: "PUT", url, payload: { finRealizada: "SIM", finData: "2026-11-10" } })).json() as { financeiro: { realizada: string; data: string }; feitas: number };
+  assert.deepEqual(fin.financeiro, { realizada: "SIM", data: "2026-11-10" });
+  assert.equal(fin.feitas, 4);
+  const nao = (await app.inject({ method: "PUT", url, payload: { finRealizada: "NAO" } })).json() as { financeiro: { data: string | null } };
+  assert.equal(nao.financeiro.data, null, "ao voltar para Não, a data é limpa");
+
+  assert.equal((await app.inject({ method: "PUT", url, payload: { sacConversa: "x".repeat(3001) } })).statusCode, 400);
+  assert.equal((await app.inject({ method: "PUT", url: "/api/problematicos/devolucoes/9999/acoes", payload: { decisao: "MANTEM" } })).statusCode, 404);
+
+  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { devolucoes: Array<{ id: number; etapasFeitas: number }> };
+  assert.equal(lista.devolucoes.find((d) => d.id === id)!.etapasFeitas, 4);
+});
+
+test("prints das ações: anexa imagem, serve de volta, recusa o que não é imagem e some junto com a devolução", async () => {
+  const { app, db } = await montar();
+  const id = await novaDevolucao(app);
+  const base = `/api/problematicos/devolucoes/${id}/acoes`;
+
+  const ok = (await app.inject({ method: "POST", url: `${base}/prints`, payload: { etapa: "sac", nome: "conversa.png", tipo: "image/png", dados: PNG } })).json() as { sac: { prints: Array<{ id: number; nome: string }> }; feitas: number };
+  assert.equal(ok.sac.prints.length, 1);
+  assert.equal(ok.feitas, 1, "só o print já conta como etapa feita");
+
+  const img = await app.inject({ method: "GET", url: `/api/problematicos/prints/${ok.sac.prints[0].id}` });
+  assert.equal(img.statusCode, 200);
+  assert.equal(img.headers["content-type"], "image/png");
+  assert.equal(img.headers["x-content-type-options"], "nosniff");
+  assert.equal(img.rawPayload.length, 12);
+
+  const ruim = (payload: object) => app.inject({ method: "POST", url: `${base}/prints`, payload });
+  assert.equal((await ruim({ etapa: "sac", nome: "a.svg", tipo: "image/svg+xml", dados: PNG })).statusCode, 400, "SVG não");
+  assert.equal((await ruim({ etapa: "sac", nome: "a.png", tipo: "image/png", dados: Buffer.from("isto não é imagem").toString("base64") })).statusCode, 400, "confere os bytes");
+  assert.equal((await ruim({ etapa: "decisao", nome: "a.png", tipo: "image/png", dados: PNG })).statusCode, 400, "só SAC, Vera e Dirceu têm print");
+  assert.equal((await ruim({ etapa: "vera", nome: "a.png", tipo: "image/png", dados: Buffer.alloc(4 * 1024 * 1024 + 10, 1).toString("base64") })).statusCode, 400, "passa de 4 MB");
+
+  const sem = (await app.inject({ method: "DELETE", url: `/api/problematicos/prints/${ok.sac.prints[0].id}` })).json() as { sac: { prints: unknown[] } };
+  assert.equal(sem.sac.prints.length, 0);
+
+  await ruim({ etapa: "dirceu", nome: "b.png", tipo: "image/png", dados: PNG });
+  await app.inject({ method: "PUT", url: base, payload: { dirceuConversa: "ok" } });
+  await app.inject({ method: "DELETE", url: `/api/problematicos/devolucoes/${id}` });
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM pcp_devolucao_print").get() as { n: number }).n, 0);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM pcp_devolucao_acao").get() as { n: number }).n, 0);
+});
+
+test("ações da devolução ficam fora do alcance do perfil de consulta", async () => {
+  const { app } = await montar("segredo", "so-leitura");
+  const r = await app.inject({ method: "GET", url: "/api/problematicos/devolucoes/1/acoes", headers: { "x-pcp-token": "so-leitura" } });
+  assert.equal(r.statusCode, 403);
+});

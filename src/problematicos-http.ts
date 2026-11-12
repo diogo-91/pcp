@@ -60,6 +60,50 @@ export function registrarProblematicos(app: FastifyInstance, servico: Problemati
     tratar(reply, () => servico.detalhe(Number((request.params as { numero: string }).numero)))
   );
 
+  // ---- Devoluções > Ações (etapas do atendimento e prints)
+  const acoes = servico.acoes;
+  const PRINT_LIMITE = 7 * 1024 * 1024; // imagem de até 4 MB em base64 cabe aqui
+
+  app.get("/api/problematicos/devolucoes/:id/acoes", async (request, reply) =>
+    tratar(reply, () => {
+      reply.header("Cache-Control", "no-store");
+      return acoes.obter(idDe((request.params as { id: string }).id));
+    })
+  );
+
+  app.put("/api/problematicos/devolucoes/:id/acoes", async (request, reply) =>
+    tratar(reply, () =>
+      acoes.salvar(
+        idDe((request.params as { id: string }).id),
+        escolher(request.body, ["sacQuem", "sacConversa", "veraConversa", "dirceuConversa", "decisao", "finRealizada", "finData"]),
+        usuarioDe(request)
+      )
+    )
+  );
+
+  app.post("/api/problematicos/devolucoes/:id/acoes/prints", { bodyLimit: PRINT_LIMITE }, async (request, reply) =>
+    tratar(reply, () => {
+      const c = escolher(request.body, ["etapa", "nome", "tipo", "dados"]);
+      return acoes.adicionarPrint(idDe((request.params as { id: string }).id), String(c.etapa ?? ""), c.nome, c.tipo, c.dados, usuarioDe(request));
+    })
+  );
+
+  app.get("/api/problematicos/prints/:id", async (request, reply) =>
+    tratar(reply, () => {
+      const p = acoes.lerPrint(idDe((request.params as { id: string }).id));
+      return reply
+        .header("Content-Type", p.mime)
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Content-Security-Policy", "default-src 'none'; sandbox")
+        .header("Cache-Control", "private, max-age=3600")
+        .send(p.dados);
+    })
+  );
+
+  app.delete("/api/problematicos/prints/:id", async (request, reply) =>
+    tratar(reply, () => acoes.removerPrint(idDe((request.params as { id: string }).id)))
+  );
+
   app.post("/api/problematicos/:tipo", async (request, reply) =>
     tratar(reply, async () => {
       const tipo = tipoDe((request.params as { tipo: string }).tipo);

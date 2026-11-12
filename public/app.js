@@ -71,6 +71,14 @@ async function api(caminho, opcoes = {}) {
   throw new Error('Acesso negado.');
 }
 
+/** Baixa um arquivo da API (ex.: print anexado) como Blob; manda o token como o resto das chamadas. */
+async function apiBlob(caminho) {
+  const headers = lerToken() ? { 'x-pcp-token': lerToken() } : {};
+  const res = await fetch(caminho, { headers });
+  if (!res.ok) throw new Error(`Erro ${res.status}`);
+  return res.blob();
+}
+
 // ---------------------------------------------------------------- avisos
 function aviso(texto, tipo = 'erro') {
   const el = $('aviso');
@@ -694,6 +702,6 @@ setInterval(() => {
 }, 60_000);
 
 // Peças que o módulo Programação (programacao.js) reaproveita: mesmo token, mesmos avisos.
-window.PCP = { api, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario };
+window.PCP = { api, apiBlob, esc, fmtData, fmtHora, $, mostrarToast, aviso, mostrarView, lerUsuario };
 
 carregar();

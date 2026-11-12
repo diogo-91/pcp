@@ -22,6 +22,8 @@ const ICONE = {
   camadas: svg('<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/>'),
   atualizar: svg('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
   mais: svg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
+  etapas: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>'),
+  clipe: svg('<path d="m21 11-9 9a5.5 5.5 0 0 1-8-8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8-8"/>'),
   lixo: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
 };
 
@@ -298,7 +300,7 @@ function renderLista() {
         ${t.campos.map((c) => (c.tipo === 'status'
           ? `<td>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td>`
           : `<td><input class="pb-in" type="${c.tipo}" data-campo="${c.k}" value="${esc(r[c.k] ?? '')}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"></td>`)).join('')}
-        <td class="pb-acoes"><button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">${ICONE.lixo}<span>Excluir</span></button></td></tr>`
+        <td class="pb-acoes">${P.aba === 'devolucoes' ? `<button type="button" class="pb-acoes-btn" data-acoes="${r.id}" title="Etapas do atendimento desta devolução" aria-label="Ações do pedido ${r.numeroPedido}: ${r.etapasFeitas || 0} de 5 etapas">${ICONE.etapas} Ações <i>${r.etapasFeitas || 0}/5</i></button>` : ''}<button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">${ICONE.lixo}<span>Excluir</span></button></td></tr>`
     )
     .join('');
 
@@ -497,7 +499,14 @@ raiz.addEventListener('click', (e) => {
   if (aba) { P.aba = aba.dataset.aba; return renderTudo(); }
   if (e.target.closest('[data-atualizar]')) return void carregar();
   if (e.target.closest('[data-novo]')) return abrirModal();
-  if (e.target.closest('[data-fechar]') || e.target.id === 'pb-modal') return $('pb-modal').close(); // clicar fora também fecha
+  if (e.target.closest('[data-fechar]')) return e.target.closest('dialog')?.close();
+  if (e.target.id === 'pb-modal' || e.target.id === 'pb-acoes-modal') return e.target.close(); // clicar fora também fecha
+  const ac = e.target.closest('[data-acoes]');
+  if (ac) return void abrirAcoes(ac.dataset.acoes);
+  const delPrint = e.target.closest('[data-del-print]');
+  if (delPrint) return void removerPrint(delPrint.dataset.delPrint);
+  const verPrint = e.target.closest('[data-ver-print]');
+  if (verPrint) return void window.open(verPrint.src, '_blank', 'noopener');
   if (e.target.closest('[data-exportar]')) { e.target.closest('details')?.removeAttribute('open'); return exportarCsv(); }
   const esc_ = e.target.closest('[data-escolher]');
   if (esc_) { $('pb-res').hidden = true; return void escolher(Number(esc_.dataset.escolher), esc_.dataset.cliente); }
@@ -511,6 +520,7 @@ raiz.addEventListener('click', (e) => {
 });
 
 raiz.addEventListener('input', (e) => {
+  if (e.target.matches('#pb-acoes-modal [data-ac]') && e.target.type !== 'radio' && e.target.type !== 'date') return void campoAcoes(e.target, false);
   if (e.target.id === 'pb-busca') {
     clearTimeout(P.timer);
     P.timer = setTimeout(() => pesquisar(e.target.value), 250);
@@ -533,6 +543,8 @@ raiz.addEventListener('keydown', (e) => {
 });
 
 raiz.addEventListener('change', (e) => {
+  if (e.target.matches('#pb-acoes-modal [data-ac]')) return void campoAcoes(e.target, true);
+  if (e.target.matches('#pb-acoes-modal [data-arquivo]')) { const f = [...e.target.files]; e.target.value = ''; return void anexarArquivos(e.target.dataset.arquivo, f); }
   if (e.target.id === 'pb-fdata') { P.f[P.aba].data = e.target.value; return renderLista(); }
   if (e.target.id === 'pb-fstatus') { P.f[P.aba].status = e.target.value; return renderLista(); }
   if (e.target.id === 'pb-f-status') { e.target.className = `pb-st pb-st-${e.target.value}`; return; }
@@ -555,4 +567,259 @@ window.PCP.problematicos = {
 
 $('pb-modal').addEventListener('close', () => {
   for (const k of Object.keys(P.sel)) P.sel[k] = null;
+});
+
+// ---------------------------------------------------------------- Devoluções > Ações (etapas do atendimento)
+
+const ETAPAS_ACOES = [
+  { k: 'sac', n: 1, titulo: 'SAC', quem: true, prints: true },
+  { k: 'vera', n: 2, titulo: 'Vera', prints: true },
+  { k: 'dirceu', n: 3, titulo: 'Dirceu', prints: true },
+];
+
+const AC = { id: null, dados: null, sujo: new Map(), fila: Promise.resolve(), timer: null, urls: new Map(), enviando: new Set() };
+
+const etapaFeita = (k, d) => {
+  if (k === 'sac') return !!(d.sac.quem || d.sac.conversa || d.sac.prints.length);
+  if (k === 'vera' || k === 'dirceu') return !!(d[k].conversa || d[k].prints.length);
+  if (k === 'decisao') return !!d.decisao;
+  return !!d.financeiro.realizada;
+};
+
+function miniaturasHtml(k) {
+  const lista = AC.dados[k].prints;
+  const enviando = AC.enviando.has(k) ? '<span class="ac-enviando">Enviando…</span>' : '';
+  return lista.map((p) => `<figure class="ac-print"><img data-ver-print data-print-id="${p.id}" alt="${esc(p.nome)}" title="${esc(p.nome)} — clique para ampliar"><button type="button" class="ac-print-x" data-del-print="${p.id}" aria-label="Remover print ${esc(p.nome)}">×</button></figure>`).join('') + enviando;
+}
+
+function carregarMiniaturas() {
+  for (const img of document.querySelectorAll('#pb-acoes-modal img[data-print-id]')) {
+    const id = img.dataset.printId;
+    if (AC.urls.has(id)) { img.src = AC.urls.get(id); continue; }
+    window.PCP.apiBlob(`/api/problematicos/prints/${id}`).then((b) => {
+      const url = URL.createObjectURL(b);
+      AC.urls.set(id, url);
+      if (img.isConnected) img.src = url;
+    }).catch(() => { img.alt = 'não foi possível carregar'; });
+  }
+}
+
+function blocoPrints(k) {
+  return `<div class="ac-anexo"><label class="ac-anexar">${ICONE.clipe} Anexar print<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-arquivo="${k}"></label>
+    <span class="ac-dica">ou cole com Ctrl+V</span></div><div class="ac-prints" id="ac-prints-${k}">${miniaturasHtml(k)}</div>`;
+}
+
+function progressoHtml() {
+  const d = AC.dados;
+  const marcas = ['sac', 'vera', 'dirceu', 'decisao', 'financeiro'];
+  return `<div class="ac-prog-barra">${marcas.map((k) => `<i class="${etapaFeita(k, d) ? 'on' : ''}"></i>`).join('')}</div><span>${d.feitas} de 5 etapas preenchidas</span>`;
+}
+
+function renderAcoes(r) {
+  const d = AC.dados;
+  const etapaTexto = (e) => `
+    <section class="ac-etapa${etapaFeita(e.k, d) ? ' feita' : ''}" data-etapa="${e.k}">
+      <span class="ac-num">${e.n}</span>
+      <div class="ac-corpo"><h4>Etapa ${e.n} — ${e.titulo}</h4>
+        ${e.quem ? `<label class="ac-campo">Quem falou com o cliente?<input data-ac="sacQuem" maxlength="120" value="${esc(d.sac.quem)}" placeholder="Nome de quem atendeu"></label>` : ''}
+        <label class="ac-campo">O que foi conversado<textarea data-ac="${e.k}Conversa" rows="3" maxlength="3000" placeholder="Resumo da conversa">${esc(d[e.k].conversa)}</textarea></label>
+        ${blocoPrints(e.k)}
+      </div>
+    </section>`;
+  const opcao = (nome, valor, texto, marcado) => `<label class="ac-opcao"><input type="radio" name="ac-${nome}" data-ac="${nome}" value="${valor}"${marcado ? ' checked' : ''}><span>${texto}</span></label>`;
+  $('pb-acoes-modal').innerHTML = `
+    <div class="pb-modal-topo">
+      <span class="pb-ico verde">${ICONE.etapas}</span><div><h3>Ações da devolução</h3><p>Pedido <b>${r.numeroPedido}</b>${r.cliente ? ` · ${esc(r.cliente)}` : ''}</p></div>
+      <button type="button" class="pb-fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="ac-prog" id="ac-prog">${progressoHtml()}</div>
+    <div class="ac-lista">
+      ${ETAPAS_ACOES.map(etapaTexto).join('')}
+      <section class="ac-etapa${etapaFeita('decisao', d) ? ' feita' : ''}" data-etapa="decisao">
+        <span class="ac-num">4</span>
+        <div class="ac-corpo"><h4>Etapa 4 — Decisão</h4>
+          <div class="ac-opcoes" role="radiogroup" aria-label="Decisão">${opcao('decisao', 'MANTEM', 'Mantém o pedido', d.decisao === 'MANTEM')}${opcao('decisao', 'CANCELAR', 'Cliente quer cancelar mesmo', d.decisao === 'CANCELAR')}</div></div>
+      </section>
+      <section class="ac-etapa${etapaFeita('financeiro', d) ? ' feita' : ''}" data-etapa="financeiro">
+        <span class="ac-num">5</span>
+        <div class="ac-corpo"><h4>Etapa 5 — Financeiro</h4>
+          <div class="ac-campo">Devolução realizada?
+            <div class="ac-opcoes" role="radiogroup" aria-label="Devolução realizada">${opcao('finRealizada', 'SIM', 'Sim', d.financeiro.realizada === 'SIM')}${opcao('finRealizada', 'NAO', 'Não', d.financeiro.realizada === 'NAO')}</div></div>
+          <label class="ac-campo" id="ac-fin-data"${d.financeiro.realizada === 'SIM' ? '' : ' hidden'}>Qual foi a data?<input type="date" data-ac="finData" min="2000-01-01" max="2100-12-31" value="${esc(d.financeiro.data || '')}"></label>
+        </div>
+      </section>
+    </div>
+    <div class="ac-rodape"><span id="ac-salvo" class="ac-salvo" role="status">Salvo automaticamente</span><button type="button" class="pb-botao" data-fechar>Fechar</button></div>`;
+  carregarMiniaturas();
+}
+
+async function abrirAcoes(id) {
+  const r = P.dados.devolucoes.find((x) => String(x.id) === String(id));
+  if (!r) return;
+  try {
+    AC.id = Number(id);
+    AC.sujo.clear();
+    AC.enviando.clear();
+    AC.dados = await api(`/api/problematicos/devolucoes/${id}/acoes`);
+    renderAcoes(r);
+    $('pb-acoes-modal').showModal();
+    $('pb-acoes-modal').scrollTop = 0; // o foco automático não deve rolar o título para fora
+  } catch (e) {
+    mostrarToast(`Não foi possível abrir as ações: ${e.message}`);
+  }
+}
+
+function atualizarEtapas() {
+  const d = AC.dados;
+  $('ac-prog').innerHTML = progressoHtml();
+  for (const sec of document.querySelectorAll('#pb-acoes-modal [data-etapa]')) sec.classList.toggle('feita', etapaFeita(sec.dataset.etapa, d));
+  const r = P.dados.devolucoes.find((x) => x.id === AC.id);
+  if (r) {
+    r.etapasFeitas = d.feitas;
+    const i = document.querySelector(`[data-acoes="${AC.id}"] i`);
+    if (i) i.textContent = `${d.feitas}/5`;
+  }
+}
+
+function marcarSalvo(texto, erroMsg = false) {
+  const el = $('ac-salvo');
+  if (!el) return;
+  el.textContent = texto;
+  el.classList.toggle('erro', erroMsg);
+}
+
+/** Envia o que foi digitado (um pedido por vez, na ordem, para uma gravação não passar por cima de outra). */
+function salvarAcoes() {
+  clearTimeout(AC.timer);
+  if (!AC.sujo.size) return AC.fila;
+  const id = AC.id;
+  const corpo = Object.fromEntries(AC.sujo);
+  AC.sujo.clear();
+  marcarSalvo('Salvando…');
+  AC.fila = AC.fila.then(async () => {
+    try {
+      await window.PCP.programacao?.garantirUsuario?.();
+      const novo = await api(`/api/problematicos/devolucoes/${id}/acoes`, { method: 'PUT', body: JSON.stringify(corpo) });
+      if (AC.id === id) {
+        // Mantém as listas de prints locais (não mudam por aqui) e atualiza o resto sem mexer no que está sendo digitado.
+        AC.dados = novo;
+        atualizarEtapas();
+        marcarSalvo('Salvo ✓');
+      }
+    } catch (e) {
+      marcarSalvo(`Não salvou: ${e.message}`, true);
+      mostrarToast(e.message);
+    }
+  });
+  return AC.fila;
+}
+
+function campoAcoes(el, agora) {
+  const campo = el.dataset.ac;
+  if (el.type === 'radio') {
+    if (!el.checked) return;
+    AC.sujo.set(campo, el.value);
+    if (campo === 'finRealizada') {
+      const caixa = $('ac-fin-data');
+      caixa.hidden = el.value !== 'SIM';
+      if (el.value !== 'SIM') caixa.querySelector('input').value = '';
+    }
+    return void salvarAcoes();
+  }
+  if (el.type === 'date') {
+    if (el.value && !/^(20\d\d)-\d\d-\d\d$/.test(el.value)) return; // ano ainda sendo digitado
+    AC.sujo.set(campo, el.value || null);
+    return void salvarAcoes();
+  }
+  AC.sujo.set(campo, el.value);
+  marcarSalvo('Digitando…');
+  clearTimeout(AC.timer);
+  if (agora) return void salvarAcoes();
+  AC.timer = setTimeout(salvarAcoes, 900);
+}
+
+// ---- prints
+
+const lerComoBase64 = (blob) => new Promise((ok, falha) => {
+  const fr = new FileReader();
+  fr.onload = () => ok(String(fr.result).split(',')[1] || '');
+  fr.onerror = () => falha(new Error('Não foi possível ler a imagem.'));
+  fr.readAsDataURL(blob);
+});
+
+/** Imagens grandes (foto de celular, tela cheia) são reduzidas antes de enviar: o print continua legível e o banco não incha. */
+async function prepararImagem(arquivo) {
+  const tiposOk = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  if (!tiposOk.includes(arquivo.type)) throw new Error(`"${arquivo.name || 'arquivo'}" não é uma imagem PNG, JPG, WEBP ou GIF.`);
+  const nome = arquivo.name && arquivo.name !== 'image.png' ? arquivo.name : `print-${new Date().toLocaleString('pt-BR').replace(/[\/:]/g, '-').replace(', ', '_')}.png`;
+  if (arquivo.type === 'image/gif' || arquivo.size <= 1_200_000) {
+    if (arquivo.size > 4 * 1024 * 1024) throw new Error(`"${nome}" passa de 4 MB.`);
+    return { nome, tipo: arquivo.type, dados: await lerComoBase64(arquivo) };
+  }
+  const bmp = await createImageBitmap(arquivo);
+  const escala = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const tela = document.createElement('canvas');
+  tela.width = Math.round(bmp.width * escala);
+  tela.height = Math.round(bmp.height * escala);
+  const ctx = tela.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, tela.width, tela.height);
+  ctx.drawImage(bmp, 0, 0, tela.width, tela.height);
+  const blob = await new Promise((ok) => tela.toBlob(ok, 'image/jpeg', 0.85));
+  if (!blob) throw new Error('Não foi possível reduzir a imagem.');
+  return { nome: nome.replace(/\.[^.]+$/, '') + '.jpg', tipo: 'image/jpeg', dados: await lerComoBase64(blob) };
+}
+
+async function anexarArquivos(etapa, arquivos) {
+  const id = AC.id;
+  for (const arq of arquivos) {
+    AC.enviando.add(etapa);
+    $(`ac-prints-${etapa}`).innerHTML = miniaturasHtml(etapa);
+    carregarMiniaturas();
+    try {
+      const img = await prepararImagem(arq);
+      await window.PCP.programacao?.garantirUsuario?.();
+      const novo = await api(`/api/problematicos/devolucoes/${id}/acoes/prints`, { method: 'POST', body: JSON.stringify({ etapa, nome: img.nome, tipo: img.tipo, dados: img.dados }) });
+      if (AC.id === id) AC.dados = novo;
+    } catch (e) {
+      mostrarToast(e.message);
+    }
+    AC.enviando.delete(etapa);
+    if (AC.id !== id) return;
+    $(`ac-prints-${etapa}`).innerHTML = miniaturasHtml(etapa);
+    carregarMiniaturas();
+    atualizarEtapas();
+  }
+}
+
+async function removerPrint(printId) {
+  if (!confirm('Remover este print?')) return;
+  const id = AC.id;
+  try {
+    const novo = await api(`/api/problematicos/prints/${printId}`, { method: 'DELETE' });
+    if (AC.id !== id) return;
+    AC.dados = novo;
+    for (const e of ETAPAS_ACOES) { const alvo = $(`ac-prints-${e.k}`); if (alvo) alvo.innerHTML = miniaturasHtml(e.k); }
+    carregarMiniaturas();
+    atualizarEtapas();
+  } catch (e) {
+    mostrarToast(e.message);
+  }
+}
+
+// Ctrl+V com uma imagem copiada cai na etapa onde o cursor está.
+$('pb-acoes-modal').addEventListener('paste', (e) => {
+  const etapa = e.target.closest?.('[data-etapa]')?.dataset.etapa;
+  if (!['sac', 'vera', 'dirceu'].includes(etapa)) return;
+  const imagens = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+  if (!imagens.length) return; // texto comum: segue o fluxo normal
+  e.preventDefault();
+  void anexarArquivos(etapa, imagens);
+});
+
+$('pb-acoes-modal').addEventListener('close', () => {
+  void salvarAcoes(); // fechou com algo ainda sem enviar: envia agora
+  for (const url of AC.urls.values()) URL.revokeObjectURL(url);
+  AC.urls.clear();
+  renderLista();
 });

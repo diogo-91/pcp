@@ -337,6 +337,32 @@ const MIGRATIONS: string[] = [
   ALTER TABLE pcp_defeito ADD COLUMN acao TEXT NOT NULL DEFAULT '';
   ALTER TABLE pcp_defeito ADD COLUMN prazo_acao TEXT;
   `,
+  // Devoluções > Ações: atendimento em etapas (SAC, Vera, Dirceu, decisão, financeiro) e os prints anexados.
+  `
+  CREATE TABLE IF NOT EXISTS pcp_devolucao_acao (
+    devolucao_id    INTEGER PRIMARY KEY,
+    sac_quem        TEXT NOT NULL DEFAULT '',
+    sac_conversa    TEXT NOT NULL DEFAULT '',
+    vera_conversa   TEXT NOT NULL DEFAULT '',
+    dirceu_conversa TEXT NOT NULL DEFAULT '',
+    decisao         TEXT NOT NULL DEFAULT '',
+    fin_realizada   TEXT NOT NULL DEFAULT '',
+    fin_data        TEXT,
+    updated_at      TEXT NOT NULL,
+    updated_by      TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS pcp_devolucao_print (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    devolucao_id  INTEGER NOT NULL,
+    etapa         TEXT NOT NULL,
+    nome          TEXT NOT NULL,
+    mime          TEXT NOT NULL,
+    dados         BLOB NOT NULL,
+    created_at    TEXT NOT NULL,
+    created_by    TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_pcp_devolucao_print ON pcp_devolucao_print (devolucao_id, etapa);
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

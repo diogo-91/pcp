@@ -3,6 +3,7 @@ import { inTransaction } from "./db";
 import { diasEntre, hojeEmSaoPaulo, isDataPlausivel } from "./prazo";
 import { reaisParaCentavos } from "./programacao/regras";
 import type { NomusLeitor } from "./sync";
+import { AcoesDevolucaoService } from "./problematicos-acoes";
 
 type Linha = Record<string, unknown>;
 
@@ -129,6 +130,7 @@ function dataBr(texto: string | undefined): string | null {
 
 export class ProblematicosService {
   private formasCache: { em: number; nomes: Map<number, string> } | null = null;
+  readonly acoes: AcoesDevolucaoService;
 
   constructor(
     private readonly db: DatabaseSync,
@@ -136,7 +138,9 @@ export class ProblematicosService {
     private readonly agora: () => Date = () => new Date(),
     /** Quanto esperar a Nomus ao preencher o formulário (ela limita as consultas e pode demorar). */
     private readonly tempoLimiteMs = 25_000
-  ) {}
+  ) {
+    this.acoes = new AcoesDevolucaoService(db, agora);
+  }
 
   // ------------------------------------------------------------ busca e preenchimento automático
 
@@ -284,6 +288,9 @@ export class ProblematicosService {
     const lista = (tipo: TipoProblematico) =>
       (this.db.prepare(`SELECT * FROM ${TABELAS[tipo].tabela} ORDER BY id DESC`).all() as Linha[]).map((l) => this.paraSaida(tipo, l));
     const dados = { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
+    // Cada devolução mostra no botão "Ações" quantas das 5 etapas já têm algo preenchido.
+    const feitas = this.acoes.feitasPorDevolucao();
+    for (const d of dados.devolucoes) d.etapasFeitas = feitas.get(d.id as number) ?? 0;
     const hoje = hojeEmSaoPaulo(this.agora());
     return {
       hoje,
@@ -376,6 +383,7 @@ export class ProblematicosService {
   remover(tipo: TipoProblematico, id: number): void {
     const r = this.db.prepare(`DELETE FROM ${TABELAS[tipo].tabela} WHERE id = ?`).run(id);
     if (Number(r.changes) === 0) throw new ErroProblematicos("Registro não encontrado.", 404);
+    if (tipo === "devolucoes") this.acoes.apagarDaDevolucao(id);
   }
 }
 
