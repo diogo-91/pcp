@@ -322,7 +322,7 @@ test("ações da devolução: etapas salvas aos poucos, contador de etapas e dec
   assert.equal((await app.inject({ method: "PUT", url, payload: { sacConversa: "x".repeat(3001) } })).statusCode, 400);
   assert.equal((await app.inject({ method: "PUT", url: "/api/problematicos/devolucoes/9999/acoes", payload: { decisao: "MANTEM" } })).statusCode, 404);
 
-  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { devolucoes: Array<{ id: number; etapasFeitas: number; etapas: Array<{ chave: string; feita: boolean; detalhe: string }> }> };
+  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { devolucoes: Array<{ id: number; etapasFeitas: number; etapas: Array<{ chave: string; feita: boolean; detalhe: string; em: string | null }> }> };
   assert.equal(lista.devolucoes.find((d) => d.id === id)!.etapasFeitas, 4);
   const etapas = lista.devolucoes.find((d) => d.id === id)!.etapas;
   assert.deepEqual(etapas.map((e) => e.chave), ["sac", "vera", "dirceu", "decisao", "financeiro"]);
@@ -368,4 +368,20 @@ test("ações da devolução ficam fora do alcance do perfil de consulta", async
   const { app } = await montar("segredo", "so-leitura");
   const r = await app.inject({ method: "GET", url: "/api/problematicos/devolucoes/1/acoes", headers: { "x-pcp-token": "so-leitura" } });
   assert.equal(r.statusCode, 403);
+});
+
+test("status Perdido: só vale para devoluções e não conta como pendente", async () => {
+  const { app } = await montar();
+  const dev = (await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1750, formaPagamento: "Pix", valor: 10 } })).json() as { id: number };
+  const urg = (await app.inject({ method: "POST", url: "/api/problematicos/urgentes", payload: { numeroPedido: 1750, dataEntregaCombinada: "2026-12-01" } })).json() as { id: number };
+
+  const ok = await app.inject({ method: "PATCH", url: `/api/problematicos/devolucoes/${dev.id}`, payload: { status: "PERDIDO" } });
+  assert.equal(ok.statusCode, 200);
+  const lista = ok.json() as { devolucoes: Array<{ status: string }>; resumo: { devolucoes: { pendentes: number }; urgentes: { pendentes: number } } };
+  assert.equal(lista.devolucoes[0].status, "PERDIDO");
+  assert.equal(lista.resumo.devolucoes.pendentes, 0, "perdido não é pendente");
+  assert.equal(lista.resumo.urgentes.pendentes, 1);
+
+  const recusa = await app.inject({ method: "PATCH", url: `/api/problematicos/urgentes/${urg.id}`, payload: { status: "PERDIDO" } });
+  assert.equal(recusa.statusCode, 400);
 });

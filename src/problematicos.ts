@@ -56,7 +56,8 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
   },
 };
 
-export const STATUS_PROBLEMATICO = ["NAO_REALIZADA", "REALIZADA"] as const;
+/** PERDIDO só existe nas devoluções (pedido que o cliente cancelou de vez): some das telas. */
+export const STATUS_PROBLEMATICO = ["NAO_REALIZADA", "REALIZADA", "PERDIDO"] as const;
 
 export interface PedidoEncontrado {
   numero: number;
@@ -322,7 +323,8 @@ export class ProblematicosService {
         } else if (typeof v === "string" && isDataPlausivel(v)) valores[c.coluna] = v;
         else throw new ErroProblematicos(`${rotulo(c.chave)} deve ser uma data válida (AAAA-MM-DD).`);
       } else if (c.tipo === "status") {
-        if (typeof v !== "string" || !(STATUS_PROBLEMATICO as readonly string[]).includes(v)) throw new ErroProblematicos("Status inválido: use REALIZADA ou NAO_REALIZADA.");
+        if (typeof v !== "string" || !(STATUS_PROBLEMATICO as readonly string[]).includes(v)) throw new ErroProblematicos("Status inválido: use NAO_REALIZADA, REALIZADA ou PERDIDO.");
+        if (v === "PERDIDO" && tipo !== "devolucoes") throw new ErroProblematicos("O status Perdido só vale para devoluções.");
         valores[c.coluna] = v;
       } else if (c.tipo === "dinheiro") {
         if (v === null || v === "") valores[c.coluna] = null;
@@ -412,7 +414,7 @@ export function resumir(registros: Array<Record<string, unknown>>, hoje: string)
   }
   const soma = (de: number, ate: number) => serie.slice(de, ate).reduce((s, n) => s + n, 0);
   return {
-    pendentes: registros.filter((r) => r.status !== "REALIZADA").length,
+    pendentes: registros.filter((r) => r.status !== "REALIZADA" && r.status !== "PERDIDO").length,
     ultimos7: soma(7, 14),
     anteriores7: soma(0, 7),
     serie,

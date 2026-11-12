@@ -25,6 +25,7 @@ const ICONE = {
   etapas: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>'),
   clipe: svg('<path d="m21 11-9 9a5.5 5.5 0 0 1-8-8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8-8"/>'),
   relogio: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  convertido: svg('<circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/>'),
   lixo: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
 };
 
@@ -39,9 +40,12 @@ const ILUSTRACAO_VAZIA = `<svg class="pb-vazio-img" viewBox="0 0 160 130" aria-h
 
 // Todo registro nasce "Não realizada"; ao marcar "Realizada" ele some da lista (continua gravado; o filtro Status traz de volta).
 const STATUS = { k: 'status', rotulo: 'Status', tipo: 'status' };
-const NOMES_STATUS = { NAO_REALIZADA: 'Não realizada', REALIZADA: 'Realizada' };
+const NOMES_STATUS = { NAO_REALIZADA: 'Não realizada', REALIZADA: 'Realizada', PERDIDO: 'Perdido' };
+/** Devoluções (e a tela de Convertidos, que é feita delas) têm o status Perdido a mais. */
+const ehDevolucao = () => P.aba === 'devolucoes' || P.aba === 'convertidos';
+const rota = (aba) => (aba === 'convertidos' ? 'devolucoes' : aba);
 const statusSelect = (atrib, atual, extra = '') =>
-  `<select ${atrib} class="pb-st pb-st-${atual}" ${extra}>${Object.entries(NOMES_STATUS).map(([v, n]) => `<option value="${v}"${v === atual ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+  `<select ${atrib} class="pb-st pb-st-${atual}" ${extra}>${Object.entries(NOMES_STATUS).filter(([v]) => v !== 'PERDIDO' || ehDevolucao() || atual === 'PERDIDO').map(([v, n]) => `<option value="${v}"${v === atual ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
 
 const TABELAS = {
   urgentes: {
@@ -80,17 +84,25 @@ const TABELAS = {
   },
 };
 
+// "Pedidos Convertidos": as devoluções que chegaram ao status Realizada (a tela é feita dos mesmos registros).
+TABELAS.convertidos = {
+  ...TABELAS.devolucoes,
+  aba: 'Pedidos Convertidos', icone: 'convertido', cor: 'verde',
+  listaTitulo: 'Pedidos convertidos', listaSub: 'Devoluções com status Realizada.',
+  vazio: 'Nenhum pedido convertido ainda.', vazioSub: 'Os pedidos de devolução marcados como Realizada aparecem aqui.',
+};
+
 const filtroInicial = () => ({ q: '', de: '', ate: '', status: 'pendentes', ordem: 'recentes' });
 
 const P = {
   auto: { forma: '', valor: '' }, // o que o formulário de devolução preencheu sozinho (para trocar ao escolher outro pedido)
   aba: 'urgentes',
-  dados: { urgentes: [], devolucoes: [], defeitos: [] },
+  dados: { urgentes: [], devolucoes: [], defeitos: [], convertidos: [] },
   resumo: null,
   hoje: '',
-  sel: { urgentes: null, devolucoes: null, defeitos: null },
-  selecionado: { urgentes: null, devolucoes: null, defeitos: null }, // registro aberto no painel da direita
-  f: { urgentes: filtroInicial(), devolucoes: filtroInicial(), defeitos: filtroInicial() },
+  sel: { urgentes: null, devolucoes: null, defeitos: null, convertidos: null },
+  selecionado: { urgentes: null, devolucoes: null, defeitos: null, convertidos: null }, // registro aberto no painel da direita
+  f: { urgentes: filtroInicial(), devolucoes: filtroInicial(), defeitos: filtroInicial(), convertidos: { ...filtroInicial(), status: 'todas' } },
   atualizadoEm: null,
   montada: null,
   timer: null,
@@ -101,7 +113,7 @@ const P = {
 function renderAbas() {
   $('pb-abas').innerHTML = Object.entries(TABELAS)
     .map(([k, t]) => {
-      const n = P.resumo ? P.resumo[k].pendentes : 0;
+      const n = k === 'convertidos' ? P.dados.convertidos.length : P.resumo ? P.resumo[k].pendentes : 0;
       return `<button type="button" data-aba="${k}" aria-selected="${k === P.aba}">${ICONE[t.icone]}<span>${esc(t.aba)}</span><i class="pb-n">${n}</i></button>`;
     })
     .join('');
@@ -120,6 +132,8 @@ const COLUNAS = {
   defeitos: [{ k: 'causa', rot: 'Causa' }, { k: 'motorista', rot: 'Motorista' }, { k: 'prazoAcao', rot: 'Prazo da ação', tipo: 'data' }],
 };
 
+COLUNAS.convertidos = COLUNAS.devolucoes;
+
 const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
 function montarAba() {
@@ -137,10 +151,10 @@ function montarAba() {
         <div class="pb-entrada-icone">${ICONE.busca}<input id="pb-fq" type="search" placeholder="Nº do pedido ou nome do cliente" value="${esc(f.q)}"></div></label>
       <div class="pb-lcampo">Período ${esc(periodo)}
         <div class="pb-periodo"><input type="date" id="pb-fde" value="${esc(f.de)}" aria-label="Data inicial"><span>até</span><input type="date" id="pb-fate" value="${esc(f.ate)}" aria-label="Data final"></div></div>
-      <label class="pb-lcampo">Status
-        <select id="pb-fstatus"><option value="pendentes">Não realizadas</option><option value="realizadas">Realizadas</option><option value="todas">Todas</option></select></label>
+      ${P.aba === 'convertidos' ? '' : `<label class="pb-lcampo">Status
+        <select id="pb-fstatus"><option value="pendentes">Não realizadas</option><option value="realizadas">Realizadas</option>${ehDevolucao() ? '<option value="perdidas">Perdidas</option>' : ''}<option value="todas">Todas</option></select></label>
       <label class="pb-check"><input type="checkbox" id="pb-fmostrar"> Mostrar realizadas (<span id="pb-n-real">0</span>)</label>
-      <div class="pb-lcampo">Atalhos<div class="pb-atalhos" id="pb-atalhos"></div></div>
+      <div class="pb-lcampo">Atalhos<div class="pb-atalhos" id="pb-atalhos"></div></div>`}
     </aside>
 
     <article class="pb-card pb-listagem">
@@ -152,7 +166,7 @@ function montarAba() {
           <details class="pb-menu"><summary class="pb-botao pb-botao-icone" aria-label="Mais opções">${ICONE.mais}</summary>
             <div class="pb-menu-caixa"><button type="button" data-exportar>Exportar CSV da lista</button></div></details>
           ${P.aba === 'devolucoes' ? `<button type="button" class="pb-botao pb-botao-acoes" data-escolher-acoes>${ICONE.etapas} Ações</button>` : ''}
-          <button type="button" class="pb-novo" data-novo><b>+</b> Adicionar</button>
+          ${P.aba === 'convertidos' ? '' : '<button type="button" class="pb-novo" data-novo><b>+</b> Adicionar</button>'}
         </div>
       </div>
       <div id="pb-lista"></div>
@@ -242,8 +256,11 @@ function registrosFiltrados() {
   const f = P.f[P.aba];
   const q = f.q.trim().toLowerCase();
   return P.dados[P.aba].filter((r) => {
-    if (f.status === 'pendentes' && r.status === 'REALIZADA') return false;
-    if (f.status === 'realizadas' && r.status !== 'REALIZADA') return false;
+    const st = r.status || 'NAO_REALIZADA';
+    if (f.status === 'pendentes' && st !== 'NAO_REALIZADA') return false;
+    if (f.status === 'realizadas' && st !== 'REALIZADA') return false;
+    if (f.status === 'perdidas' && st !== 'PERDIDO') return false;
+    if (f.status === 'todas' && st === 'PERDIDO') return false; // perdido só aparece quando pedido de propósito
     if (q && ![r.numeroPedido, r.cliente, r.causa, r.motorista, r.acao, r.formaPagamento].join(' ').toLowerCase().includes(q)) return false;
     if (f.de || f.ate) {
       const d = t.data.tipo === 'cadastro' ? diaSP(r[t.data.campo]) : r[t.data.campo];
@@ -268,13 +285,15 @@ function sincronizarFiltros() {
   const f = P.f[P.aba];
   const dados = P.dados[P.aba];
   const feitas = dados.filter((r) => r.status === 'REALIZADA').length;
-  const abertas = dados.length - feitas;
+  const perdidas = dados.filter((r) => r.status === 'PERDIDO').length;
+  const abertas = dados.length - feitas - perdidas;
   if ($('pb-fstatus')) $('pb-fstatus').value = f.status;
   if ($('pb-fmostrar')) $('pb-fmostrar').checked = f.status !== 'pendentes';
   if ($('pb-n-real')) $('pb-n-real').textContent = feitas;
   if ($('pb-atalhos')) {
-    $('pb-atalhos').innerHTML = [['todas', 'Todos', dados.length], ['pendentes', 'Não realizada', abertas], ['realizadas', 'Realizada', feitas]]
-      .map(([v, n, c]) => `<button type="button" data-atalho="${v}" class="${f.status === v ? 'on' : ''}">${n} (${c})</button>`).join('');
+    const itens = [['todas', 'Todos', dados.length - perdidas], ['pendentes', 'Não realizada', abertas], ['realizadas', 'Realizada', feitas]];
+    if (ehDevolucao()) itens.push(['perdidas', 'Perdido', perdidas]);
+    $('pb-atalhos').innerHTML = itens.map(([v, n, c]) => `<button type="button" data-atalho="${v}" class="${f.status === v ? 'on' : ''}">${n} (${c})</button>`).join('');
   }
 }
 
@@ -283,7 +302,6 @@ const pontosEtapas = (r) =>
   `<button type="button" class="pb-pontos" data-acoes="${r.id}" aria-label="Ações do pedido ${r.numeroPedido}: ${r.etapasFeitas || 0} de 5 etapas" title="${(r.etapas || []).map((e) => `${e.nome}: ${e.feita ? 'feita' : 'pendente'}`).join(' · ')}">
     ${(r.etapas || []).map((e) => `<i class="${e.feita ? 'on' : ''}"></i>`).join('')}<b>${r.etapasFeitas || 0}/5</b></button>`;
 
-/** Coluna "Etapas" do painel de detalhes: as 5 etapas, as feitas em amarelo; clicar abre as Ações. */
 function etapasHtml(r) {
   const lista = r.etapas || [];
   const feitas = r.etapasFeitas || 0;
@@ -378,12 +396,12 @@ function renderDetalhe() {
         <div><span>Categoria</span><b class="pb-chip-cat">${esc(t.aba.replace('Pedidos ', ''))}</b></div>
       </div>
       <div class="pb-det-campos">${t.campos.map((c) => campoDetalhe(c, r)).join('')}</div>
-      ${P.aba === 'devolucoes' ? `<div class="pb-det-sec"><h5>${ICONE.relogio} Etapas do atendimento <i class="pb-h5-n">${r.etapasFeitas || 0}/5</i></h5>${linhaDoTempo(r)}</div>` : ''}
+      ${ehDevolucao() ? `<div class="pb-det-sec"><h5>${ICONE.relogio} Etapas do atendimento <i class="pb-h5-n">${r.etapasFeitas || 0}/5</i></h5>${linhaDoTempo(r)}</div>` : ''}
       <div class="pb-det-sec"><h5>${ICONE.relogio} Histórico</h5>
         <ul class="pb-hist"><li><i class="on"></i><div><b>Cadastrado</b><small>${esc(quando(r.criadoEm))}</small></div></li>
           ${r.atualizadoEm && r.atualizadoEm !== r.criadoEm ? `<li><i></i><div><b>Última alteração${r.atualizadoPor ? ` por ${esc(r.atualizadoPor)}` : ''}</b><small>${esc(quando(r.atualizadoEm))}</small></div></li>` : ''}</ul></div>
       <div class="pb-det-rodape">
-        ${P.aba === 'devolucoes' ? `<button type="button" class="pb-botao pb-botao-acoes" data-acoes="${r.id}">${ICONE.etapas} Abrir ações</button>` : ''}
+        ${ehDevolucao() ? `<button type="button" class="pb-botao pb-botao-acoes" data-acoes="${r.id}">${ICONE.etapas} Abrir ações</button>` : ''}
         <button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro">${ICONE.lixo}<span>Excluir</span></button>
       </div>
     </div>`;
@@ -400,7 +418,7 @@ function renderTudo() {
 // ---------------------------------------------------------------- dados
 
 function aplicar(r) {
-  P.dados = { urgentes: r.urgentes, devolucoes: r.devolucoes, defeitos: r.defeitos };
+  P.dados = { urgentes: r.urgentes, devolucoes: r.devolucoes, defeitos: r.defeitos, convertidos: r.devolucoes.filter((d) => d.status === 'REALIZADA') };
   P.resumo = r.resumo;
   P.hoje = r.hoje;
   P.atualizadoEm = new Date();
@@ -482,7 +500,7 @@ async function adicionar() {
   const aba = P.aba;
   try {
     await window.PCP.programacao?.garantirUsuario?.();
-    const criado = await api(`/api/problematicos/${aba}`, { method: 'POST', body: JSON.stringify(corpo) });
+    const criado = await api(`/api/problematicos/${rota(aba)}`, { method: 'POST', body: JSON.stringify(corpo) });
     aplicar(criado);
     P.selecionado[aba] = criado.id;
     P.sel[aba] = null;
@@ -500,6 +518,7 @@ async function salvarLinha(el) {
   const id = el.closest('[data-id]').dataset.id;
   const aba = P.aba;
   const c = TABELAS[aba].campos.find((x) => x.k === el.dataset.campo);
+  const anterior = c.k === 'status' ? P.dados[aba].find((r) => String(r.id) === id)?.status || 'NAO_REALIZADA' : null;
   let v = el.value.trim();
   if (c.tipo === 'date' && v && !/^(20\d\d)-\d\d-\d\d$/.test(v)) return; // ano ainda sendo digitado
   if (c.tipo === 'number') v = v === '' ? null : Number(v);
@@ -511,17 +530,20 @@ async function salvarLinha(el) {
   el.classList.add('salvando');
   try {
     await window.PCP.programacao?.garantirUsuario?.();
-    aplicar(await api(`/api/problematicos/${aba}/${id}`, { method: 'PATCH', body: JSON.stringify({ [c.k]: v }) }));
+    aplicar(await api(`/api/problematicos/${rota(aba)}/${id}`, { method: 'PATCH', body: JSON.stringify({ [c.k]: v }) }));
     el.classList.remove('erro');
     renderAbas();
     renderLista(); // atualiza a linha na fila (e some dela se virou realizada com o filtro "Não realizadas")
     if (c.k === 'status') {
       const numero = P.dados[aba].find((x) => String(x.id) === id)?.numeroPedido;
       renderDetalhe();
-      if (v === 'REALIZADA' && P.f[aba].status === 'pendentes') {
-        mostrarToast(`Pedido ${numero} marcado como realizada e ocultado.`, async () => {
+      if (!registrosFiltrados().some((x) => String(x.id) === id) && anterior !== v) {
+        const msg = v === 'PERDIDO' ? `Pedido ${numero} marcado como perdido e removido da tela.`
+          : v === 'REALIZADA' && aba === 'devolucoes' ? `Pedido ${numero} realizado: agora está em Pedidos Convertidos.`
+          : `Pedido ${numero} marcado como ${NOMES_STATUS[v].toLowerCase()} e ocultado.`;
+        mostrarToast(msg, async () => {
           try {
-            aplicar(await api(`/api/problematicos/${aba}/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'NAO_REALIZADA' }) }));
+            aplicar(await api(`/api/problematicos/${rota(aba)}/${id}`, { method: 'PATCH', body: JSON.stringify({ status: anterior }) }));
             renderTudo();
           } catch (e2) { mostrarToast(e2.message); }
         });
@@ -539,7 +561,7 @@ async function remover(id) {
   const r = P.dados[P.aba].find((x) => String(x.id) === id);
   if (!r || !confirm(`Excluir o registro do pedido ${r.numeroPedido}?`)) return;
   try {
-    aplicar(await api(`/api/problematicos/${P.aba}/${id}`, { method: 'DELETE' }));
+    aplicar(await api(`/api/problematicos/${rota(P.aba)}/${id}`, { method: 'DELETE' }));
     renderAbas();
     renderLista();
   } catch (e) {
@@ -582,7 +604,7 @@ raiz.addEventListener('click', (e) => {
   const atalho = e.target.closest('[data-atalho]');
   if (atalho) { P.f[P.aba].status = atalho.dataset.atalho; return renderLista(); }
   if (e.target.closest('[data-limpar]')) {
-    P.f[P.aba] = { ...filtroInicial(), ordem: P.f[P.aba].ordem };
+    P.f[P.aba] = { ...filtroInicial(), status: P.aba === 'convertidos' ? 'todas' : 'pendentes', ordem: P.f[P.aba].ordem };
     for (const id of ['pb-fq', 'pb-fde', 'pb-fate']) if ($(id)) $(id).value = '';
     return renderLista();
   }
@@ -992,7 +1014,7 @@ function abrirEscolhaAcoes() {
 
 function renderEscolha(q) {
   const t = q.trim().toLowerCase();
-  const lista = P.dados.devolucoes.filter((r) => r.status !== 'REALIZADA' && (!t || `${r.numeroPedido} ${r.cliente}`.toLowerCase().includes(t)));
+  const lista = P.dados.devolucoes.filter((r) => (r.status || 'NAO_REALIZADA') === 'NAO_REALIZADA' && (!t || `${r.numeroPedido} ${r.cliente}`.toLowerCase().includes(t)));
   $('pb-escolha-lista').innerHTML = lista.length
     ? lista.map((r) => `<li><button type="button" data-acoes="${r.id}"><b>${r.numeroPedido}</b><span>${esc(r.cliente || 'sem nome')}</span><i>${r.etapasFeitas || 0}/5</i></button></li>`).join('')
     : '<li class="pb-nada">Nenhuma devolução em aberto. Use "Adicionar" para cadastrar.</li>';
