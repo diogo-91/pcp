@@ -164,7 +164,7 @@ function montarAba() {
       <div class="pb-card-topo"><span class="pb-ico ${t.cor}">${ICONE.plus}</span><div><h3>${esc(t.cardTitulo)}</h3><p>${esc(t.cardSub)}</p></div></div>
       <div class="pb-campos">
         <div class="pb-campo pb-busca-campo"><label>Número do pedido <i>*</i></label>
-          <div class="pb-entrada-icone" id="pb-entrada">${ICONE.busca}<input id="pb-busca" type="search" autocomplete="off" placeholder="Digite o número do pedido ou o nome do cliente"></div>
+          <div class="pb-entrada-icone" id="pb-entrada">${ICONE.busca}<input id="pb-busca" type="search" autocomplete="off" placeholder="Número ou nome do cliente"></div>
           <ul class="pb-res" id="pb-res" hidden></ul>
           <div class="pb-sel" id="pb-sel" hidden></div>
         </div>
@@ -186,7 +186,7 @@ function montarAba() {
       </div>
       <div class="pb-filtros">
         <span class="pb-filtros-rotulo">${ICONE.filtro} Filtros rápidos</span>
-        <div class="pb-entrada-icone pb-filtro-busca">${ICONE.busca}<input id="pb-fq" type="search" placeholder="Número do pedido ou cliente" value="${esc(f.q)}" aria-label="Filtrar por pedido ou cliente"></div>
+        <div class="pb-entrada-icone pb-filtro-busca">${ICONE.busca}<input id="pb-fq" type="search" placeholder="Pedido ou cliente" value="${esc(f.q)}" aria-label="Filtrar por pedido ou cliente"></div>
         <label class="pb-select-icone">${ICONE.calendario}<select id="pb-fdata" aria-label="Filtrar por ${esc(t.data.rotulo)}">${OPCOES_DATA[t.data.tipo].map(([v, n]) => `<option value="${v}"${v === f.data ? ' selected' : ''}>${v === '' ? esc(t.data.rotulo) : esc(n)}</option>`).join('')}</select></label>
         <label class="pb-select-icone">${ICONE.camadas}<select id="pb-fstatus" aria-label="Filtrar por status">
           <option value="pendentes"${f.status === 'pendentes' ? ' selected' : ''}>Não realizadas</option>

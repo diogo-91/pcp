@@ -153,7 +153,7 @@
 .pb-tabs button[aria-selected=true] .pb-n{background:#fff;color:#8a5a00}
 
 /* grade: cadastro à esquerda, lista à direita */
-.pb-grid{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:20px;align-items:start}
+.pb-grid{display:grid;grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:18px;align-items:start}
 .pb-card{background:#fff;border:1px solid #efe9db;border-radius:22px;box-shadow:0 10px 30px #1524340d;padding:22px}
 .pb-card-topo{display:flex;align-items:center;gap:14px;margin-bottom:18px}
 .pb-card-topo h3{margin:0;font-size:18px;font-weight:850;letter-spacing:-.3px;color:#18283a}
@@ -236,3 +236,80 @@
 
 @media(max-width:1180px){.pb-grid{grid-template-columns:1fr}.pb-kpis{grid-template-columns:1fr}.pb-spark{width:110px}}
 @media(max-width:760px){.pb-titulo h2{font-size:24px}.pb-sync{width:100%;min-width:0}.pb-tabs button{flex:1 1 100%;justify-content:center}.pb-card{padding:16px;border-radius:18px}.pb-topo-acoes{margin-left:0;width:100%}}
+
+/* cartão de cadastro mais compacto: sobra mais espaço para a lista */
+.pb-cadastro{padding:16px 16px 14px;border-radius:18px}
+.pb-cadastro .pb-card-topo{gap:10px;margin-bottom:12px}
+.pb-cadastro .pb-ico{width:40px;height:40px;border-radius:12px}
+.pb-cadastro .pb-ico svg{width:21px;height:21px}
+.pb-cadastro .pb-card-topo h3{font-size:15.5px;letter-spacing:-.2px}
+.pb-cadastro .pb-card-topo p{font-size:11.5px;margin-top:2px}
+.pb-cadastro .pb-campos{gap:10px}
+.pb-cadastro .pb-campo label{margin-bottom:4px;font-size:12px}
+.pb-cadastro .pb-campo input,.pb-cadastro .pb-campo select,.pb-cadastro .pb-entrada-icone{height:40px;font-size:13px;border-radius:10px}
+.pb-cadastro .pb-entrada-icone{padding:0 11px;gap:8px}
+.pb-cadastro .pb-campo input,.pb-cadastro .pb-campo select{padding:0 11px}
+.pb-cadastro .pb-campo .pb-entrada-icone input{padding:0;height:100%}
+.pb-cadastro .pb-chip{padding:8px 6px 8px 11px;font-size:12px;border-radius:10px}
+.pb-cadastro .pb-adicionar{height:42px;margin-top:14px;font-size:14px;border-radius:12px}
+.pb-cadastro .pb-dica{margin-top:8px;font-size:11px}
+.pb-listagem{padding:20px 22px}
+
+/* Pedidos problemáticos: escala compacta (títulos, indicadores, abas e tabela menores) */
+.pb-view{padding-top:20px;padding-bottom:20px}
+.pb-trilha{margin-bottom:8px;font-size:10px}
+.pb-topo{margin-bottom:12px;gap:12px}
+.pb-titulo{gap:12px}
+.pb-icone-grande{width:44px;height:44px;border-radius:13px}
+.pb-icone-grande svg{width:22px;height:22px}
+.pb-titulo h2{font-size:22px;letter-spacing:-.5px}
+.pb-titulo p{margin-top:4px;font-size:12px;line-height:1.45}
+.pb-sync{padding:8px 12px;gap:10px;min-width:240px;border-radius:13px}
+.pb-sync b{font-size:12px}
+.pb-sync small{font-size:10.5px}
+.pb-sync-ok{width:26px;height:26px}
+.pb-sync-ok svg{width:14px;height:14px}
+.pb-sync-btn{width:30px;height:30px}
+.pb-sync-btn svg{width:15px;height:15px}
+
+.pb-kpis{gap:12px;margin-bottom:14px}
+.pb-kpi{padding:11px 14px;gap:10px;border-radius:15px}
+.pb-ico{width:38px;height:38px;border-radius:11px}
+.pb-ico svg{width:20px;height:20px}
+.pb-kpi-meio b{font-size:12.5px}
+.pb-kpi-num{gap:8px;margin:0}
+.pb-kpi-num strong{font-size:28px;letter-spacing:-1px}
+.pb-kpi small{font-size:10px}
+.pb-trend{font-size:10px;padding:2px 7px}
+.pb-spark{width:96px;height:34px}
+
+.pb-tabs{gap:8px;margin-bottom:14px}
+.pb-tabs button{padding:8px 15px;gap:7px;font-size:12.5px}
+.pb-tabs button svg{width:15px;height:15px}
+.pb-n{min-width:20px;height:20px;font-size:11px;padding:0 6px}
+
+.pb-grid{gap:14px}
+.pb-card{border-radius:16px}
+.pb-listagem{padding:14px 16px}
+.pb-listagem .pb-card-topo{gap:10px;margin-bottom:12px}
+.pb-listagem .pb-card-topo h3{font-size:15px}
+.pb-listagem .pb-card-topo p{font-size:11.5px;margin-top:2px}
+.pb-listagem .pb-ico{width:36px;height:36px}
+.pb-botao{padding:6px 11px;font-size:12px;border-radius:10px}
+.pb-botao svg{width:14px;height:14px}
+.pb-filtros{gap:8px;margin-bottom:10px}
+.pb-filtros-rotulo{font-size:12px}
+.pb-filtro-busca{height:36px}
+.pb-select-icone select{height:36px;font-size:12px;min-width:150px;border-radius:10px}
+.pb-tabela{font-size:12px}
+.pb-tabela th{padding:9px 11px;font-size:11px}
+.pb-tabela td{padding:7px 11px}
+.pb-in{height:32px;font-size:12px}
+.pb-st{height:30px;font-size:11.5px;min-width:125px}
+.pb-excluir{padding:5px 9px;font-size:11px}
+.pb-vazio{padding:20px 16px 26px}
+.pb-vazio-img{width:120px}
+.pb-vazio h4{font-size:16px}
+.pb-vazio p{font-size:12px}
+.pb-rodape{font-size:11px}
+#view-problematicos:not([hidden]) ~ .notice{display:none}
