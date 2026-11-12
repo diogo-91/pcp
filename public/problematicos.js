@@ -123,11 +123,10 @@ function renderKpis() {
     .map(([k, t]) => {
       const r = P.resumo[k];
       const tr = tendencia(r);
-      return `<button type="button" class="pb-kpi${k === P.aba ? ' ativo' : ''}" data-aba="${k}" aria-label="${esc(t.aba)}: ${r.pendentes} pendentes">
+      return `<button type="button" class="pb-kpi${k === P.aba ? ' ativo' : ''}" data-aba="${k}" title="vs. últimos 7 dias" aria-label="${esc(t.aba)}: ${r.pendentes} pendentes">
         <span class="pb-ico ${t.cor}">${ICONE[t.icone]}</span>
         <div class="pb-kpi-meio"><b>${esc(t.aba.replace('Pedidos ', '').replace('de ', ''))}</b>
-          <div class="pb-kpi-num"><strong>${r.pendentes}</strong><span class="pb-trend ${tr.cls}">${esc(tr.txt)}</span></div>
-          <small>vs. últimos 7 dias</small></div>
+          <div class="pb-kpi-num"><strong>${r.pendentes}</strong><span class="pb-trend ${tr.cls}" title="Novos cadastros: últimos 7 dias contra os 7 anteriores">${esc(tr.txt)}</span></div></div>
         ${sparkline(r.serie, t.cor === 'verde' ? 'verde' : 'ouro')}</button>`;
     })
     .join('');
