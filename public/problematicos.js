@@ -83,6 +83,7 @@ const TABELAS = {
 const filtroInicial = () => ({ q: '', de: '', ate: '', status: 'pendentes', ordem: 'recentes' });
 
 const P = {
+  auto: { forma: '', valor: '' }, // o que o formulário de devolução preencheu sozinho (para trocar ao escolher outro pedido)
   aba: 'urgentes',
   dados: { urgentes: [], devolucoes: [], defeitos: [] },
   resumo: null,
@@ -166,6 +167,7 @@ function montarAba() {
 function abrirModal() {
   const t = TABELAS[P.aba];
   P.sel[P.aba] = null;
+  P.auto = { forma: '', valor: '' };
 
   const campoForm = (c) =>
     c.tipo === 'status'
@@ -445,8 +447,12 @@ async function escolher(numero, cliente) {
     P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false, aviso: d.aviso || '', valor: d.valor, valorTotal: d.valorTotal };
     // Devolução: forma de pagamento e valor saem do pedido de venda (só em campo vazio: o que foi digitado vale mais).
     if (aba === 'devolucoes') {
-      if ($('pb-f-formaPagamento') && !$('pb-f-formaPagamento').value) $('pb-f-formaPagamento').value = d.formaPagamento || '';
-      if ($('pb-f-valor') && !$('pb-f-valor').value) $('pb-f-valor').value = d.valor ?? '';
+      // Só não sobrescreve o que a pessoa digitou: o que veio do pedido anterior (preenchido sozinho) é trocado pelo do novo pedido.
+      const forma = $('pb-f-formaPagamento');
+      const valor = $('pb-f-valor');
+      if (forma && (!forma.value || forma.value === P.auto.forma)) forma.value = d.formaPagamento || '';
+      if (valor && (!valor.value || valor.value === P.auto.valor)) valor.value = d.valor ?? '';
+      P.auto = { forma: forma ? forma.value : '', valor: valor ? valor.value : '' };
       P.sel[aba].preenchido = !!(d.formaPagamento || d.valor !== null);
     }
     if (P.aba === aba) {
