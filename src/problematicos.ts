@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { inTransaction } from "./db";
-import { isDataPlausivel } from "./prazo";
+import { diasEntre, hojeEmSaoPaulo, isDataPlausivel } from "./prazo";
 import { reaisParaCentavos } from "./programacao/regras";
 import type { NomusLeitor } from "./sync";
 
@@ -283,7 +283,17 @@ export class ProblematicosService {
   listar() {
     const lista = (tipo: TipoProblematico) =>
       (this.db.prepare(`SELECT * FROM ${TABELAS[tipo].tabela} ORDER BY id DESC`).all() as Linha[]).map((l) => this.paraSaida(tipo, l));
-    return { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
+    const dados = { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
+    const hoje = hojeEmSaoPaulo(this.agora());
+    return {
+      hoje,
+      ...dados,
+      resumo: {
+        urgentes: resumir(dados.urgentes, hoje),
+        devolucoes: resumir(dados.devolucoes, hoje),
+        defeitos: resumir(dados.defeitos, hoje),
+      },
+    };
   }
 
   private validarCampos(tipo: TipoProblematico, corpo: Record<string, unknown>, parcial: boolean): Record<string, unknown> {
@@ -367,6 +377,34 @@ export class ProblematicosService {
     const r = this.db.prepare(`DELETE FROM ${TABELAS[tipo].tabela} WHERE id = ?`).run(id);
     if (Number(r.changes) === 0) throw new ErroProblematicos("Registro não encontrado.", 404);
   }
+}
+
+export interface ResumoProblematico {
+  /** Registros ainda "não realizados" (é o número grande do cartão). */
+  pendentes: number;
+  /** Quantos foram cadastrados nos últimos 7 dias (hoje incluído) e nos 7 dias antes desses. */
+  ultimos7: number;
+  anteriores7: number;
+  /** Cadastros por dia nos últimos 14 dias, do mais antigo ao de hoje (alimenta o minigráfico). */
+  serie: number[];
+}
+
+/** Indicadores do cartão: pendentes e ritmo de novos cadastros (últimos 7 dias contra os 7 anteriores). */
+export function resumir(registros: Array<Record<string, unknown>>, hoje: string): ResumoProblematico {
+  const serie = new Array<number>(14).fill(0);
+  for (const r of registros) {
+    const criado = new Date(String(r.criadoEm));
+    if (Number.isNaN(criado.getTime())) continue;
+    const atras = diasEntre(hojeEmSaoPaulo(criado), hoje); // dias entre o cadastro e hoje
+    if (atras >= 0 && atras <= 13) serie[13 - atras]++;
+  }
+  const soma = (de: number, ate: number) => serie.slice(de, ate).reduce((s, n) => s + n, 0);
+  return {
+    pendentes: registros.filter((r) => r.status !== "REALIZADA").length,
+    ultimos7: soma(7, 14),
+    anteriores7: soma(0, 7),
+    serie,
+  };
 }
 
 const rotulo = (chave: string) =>

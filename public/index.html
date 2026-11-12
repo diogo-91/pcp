@@ -290,16 +290,27 @@
       </section>
 
       <!-- ============ PEDIDOS PROBLEMÁTICOS (tela própria) ============ -->
-      <section id="view-problematicos" class="view" hidden>
-        <div class="viewhead">
-          <div>
-            <div class="eyebrow">CONTROLE OPERACIONAL</div>
-            <h2>Pedidos problemáticos</h2>
-            <p>Registre os pedidos urgentes, as devoluções e os clientes com defeito. Escolha o pedido pela busca: os dados dele são preenchidos sozinhos.</p>
+      <section id="view-problematicos" class="view pb-view" hidden>
+        <nav class="pb-trilha" aria-label="Você está em">
+          <button type="button" data-ir="dashboard">Dashboard</button><span aria-hidden="true">›</span>
+          <button type="button" data-ir="tabela">Pedidos</button><span aria-hidden="true">›</span>
+          <b>Controle operacional</b>
+        </nav>
+        <header class="pb-topo">
+          <div class="pb-titulo">
+            <span class="pb-icone-grande" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5M12 18h.01"/></svg></span>
+            <div><h2>Pedidos problemáticos</h2>
+              <p>Registre os pedidos urgentes, as devoluções e os clientes com defeito. Escolha o pedido pela busca: os dados dele são preenchidos sozinhos. Os registros são os mesmos do PCP.</p></div>
           </div>
-          <button type="button" class="btn-sync" id="pb-voltar">← Voltar para a tabela de pedidos</button>
-        </div>
-        <article class="panel"><div id="pb-raiz" class="pb-corpo"></div></article>
+          <div class="pb-sync" id="pb-sync">
+            <span class="pb-sync-ok" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></svg></span>
+            <div><b>Sincronizado com o PCP</b><small id="pb-sync-txt">Carregando…</small></div>
+            <button type="button" class="pb-sync-btn" data-atualizar title="Atualizar agora" aria-label="Atualizar agora"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+          </div>
+        </header>
+        <section class="pb-kpis" id="pb-kpis" aria-label="Indicadores"></section>
+        <nav class="pb-tabs" id="pb-abas" aria-label="Tabelas"></nav>
+        <div class="pb-grid" id="pb-grid"></div>
       </section>
 
       <div class="notice">

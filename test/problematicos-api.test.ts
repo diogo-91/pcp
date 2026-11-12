@@ -256,3 +256,30 @@ test("clientes/defeitos: ação (texto) e prazo da ação (data opcional, pode s
   assert.equal((await app.inject({ method: "PATCH", url: `/api/problematicos/defeitos/${id}`, payload: { prazoAcao: "xx" } })).statusCode, 400);
   assert.equal((await app.inject({ method: "PATCH", url: `/api/problematicos/defeitos/${id}`, payload: { acao: "x".repeat(501) } })).statusCode, 400);
 });
+
+test("indicadores do cartão: pendentes, últimos 7 dias contra os 7 anteriores e série dos 14 dias", async () => {
+  const { db } = await montar();
+  const relogio = { atual: new Date("2026-11-12T15:00:00Z") };
+  const servico = new ProblematicosService(db, null, () => relogio.atual);
+  const dia = (iso: string) => { relogio.atual = new Date(`${iso}T15:00:00Z`); };
+
+  dia("2026-10-25"); await servico.criar("defeitos", { numeroPedido: 1744, causa: "fora da janela de 14 dias" }, "t");
+  dia("2026-11-01"); await servico.criar("defeitos", { numeroPedido: 1744, causa: "semana anterior A" }, "t");
+  dia("2026-11-04"); await servico.criar("defeitos", { numeroPedido: 1744, causa: "semana anterior B" }, "t");
+  dia("2026-11-06"); await servico.criar("defeitos", { numeroPedido: 1744, causa: "últimos 7 dias A" }, "t");
+  dia("2026-11-12"); const ultimo = await servico.criar("defeitos", { numeroPedido: 1744, causa: "hoje" }, "t");
+  dia("2026-11-12");
+  servico.editar("defeitos", ultimo, { status: "REALIZADA" }, "t"); // realizada não conta como pendente
+
+  const r = servico.listar();
+  assert.equal(r.hoje, "2026-11-12");
+  const d = r.resumo.defeitos;
+  assert.equal(d.pendentes, 4);
+  assert.equal(d.ultimos7, 2, "06/11 e 12/11");
+  assert.equal(d.anteriores7, 2, "01/11 e 04/11");
+  assert.equal(d.serie.length, 14);
+  assert.equal(d.serie[13], 1, "hoje");
+  assert.equal(d.serie[7], 1, "06/11");
+  assert.equal(d.serie.reduce((a, b) => a + b, 0), 4, "o de 25/10 está fora dos 14 dias");
+  assert.deepEqual(r.resumo.urgentes, { pendentes: 0, ultimos7: 0, anteriores7: 0, serie: new Array(14).fill(0) });
+});
