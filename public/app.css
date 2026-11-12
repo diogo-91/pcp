@@ -345,3 +345,34 @@
 .pb-trend{font-size:9.5px;padding:2px 6px}
 .pb-spark{width:78px;height:24px;margin-left:auto}
 .pb-tabs{margin-bottom:10px}
+
+/* Pedidos problemáticos: somente AMARELO (sem dourado/marrom). Textos em cinza-azulado escuro. */
+.pb-view{--c-ouro:#f5c000;--amarelo:#fbc41a;--amarelo-claro:#fff6bf;--amarelo-fundo:#fffbe0;
+  background:radial-gradient(900px 320px at 88% -40px,#fff8cc 0,rgba(255,248,204,0) 70%)}
+.pb-trilha,.pb-trilha button{color:#7a8897}
+.pb-trilha b{color:#18283a}
+.pb-trilha span{color:#c4cbd4}
+.pb-icone-grande{background:linear-gradient(145deg,#ffee99,#fff8cc);box-shadow:0 8px 20px #f5c00026}
+.pb-icone-grande svg{stroke:#e6b400}
+.pb-ico.ouro{background:#fff6bf;color:#e0ae00}
+.pb-kpi{border-color:#f0ecc8}
+.pb-kpi.ativo{border-color:#f5c518;box-shadow:0 0 0 3px #f5c51833,0 6px 16px #f5c0001a}
+.pb-trend.sobe{background:#fff3a8;color:#40566b}
+.pb-tabs button{border-color:#ece9cf}
+.pb-tabs button:hover{border-color:#f5c518;background:#fffbe3}
+.pb-tabs button[aria-selected=true]{color:#18283a;border-color:#efb800;background:linear-gradient(180deg,#ffd633,#fbc41a);box-shadow:0 6px 16px #f5c00040}
+.pb-tabs button[aria-selected=true]:after{background:#fbc41a}
+.pb-tabs button[aria-selected=true] .pb-n{background:#fff;color:#18283a}
+.pb-card{border-color:#eceef1}
+.pb-botao:hover{border-color:#f5c518;background:#fffbe3}
+.pb-menu-caixa button:hover,.pb-res button:hover,.pb-res button:focus{background:#fff9cf}
+.pb-campo input:focus,.pb-campo select:focus,.pb-entrada-icone:focus-within,.pb-in:focus{border-color:#f5c518;box-shadow:0 0 0 3px #f5c51833}
+.pb-in:focus{background:#fffef2}
+.pb-chip{background:#fff8c5;border-color:#f3e07a;color:#3a4350}
+.pb-chip button{color:#5a6c7e}
+.pb-chip button:hover{background:#f3e07a}
+.pb-adicionar,.pb-novo{background:linear-gradient(180deg,#ffd633,#fbc41a);color:#1f2933;box-shadow:0 6px 14px #f5c00040}
+.pb-aviso{color:#8a7400}
+.pb-st-NAO_REALIZADA{background:#fff3a8;color:#4a4300}
+.pb-tabela tbody tr:hover td{background:#fffdeb}
+.pb-vazio{background:linear-gradient(180deg,#fffdeb,#fff)}

@@ -26,11 +26,11 @@ const ICONE = {
 };
 
 const ILUSTRACAO_VAZIA = `<svg class="pb-vazio-img" viewBox="0 0 160 130" aria-hidden="true">
-  <ellipse cx="80" cy="118" rx="52" ry="7" fill="#f3e6c4"/>
+  <ellipse cx="80" cy="118" rx="52" ry="7" fill="#fff3a8"/>
   <rect x="38" y="16" width="70" height="90" rx="9" fill="#eceff3" stroke="#c9d0d9" stroke-width="2"/>
   <rect x="58" y="9" width="30" height="14" rx="5" fill="#b9c1cc"/>
   <g stroke="#b9c1cc" stroke-width="3" stroke-linecap="round" fill="none"><path d="M50 42h8M64 42h30M50 58h8M64 58h30M50 74h8M64 74h24"/></g>
-  <path d="M110 70 148 112H72L110 70Z" fill="#f5b81c" stroke="#e0a010" stroke-width="2" stroke-linejoin="round" transform="translate(-4 -2)"/>
+  <path d="M110 70 148 112H72L110 70Z" fill="#ffd633" stroke="#f0b800" stroke-width="2" stroke-linejoin="round" transform="translate(-4 -2)"/>
   <path d="M106 86v12M106 106h.01" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
 </svg>`;
 
