@@ -322,8 +322,13 @@ test("ações da devolução: etapas salvas aos poucos, contador de etapas e dec
   assert.equal((await app.inject({ method: "PUT", url, payload: { sacConversa: "x".repeat(3001) } })).statusCode, 400);
   assert.equal((await app.inject({ method: "PUT", url: "/api/problematicos/devolucoes/9999/acoes", payload: { decisao: "MANTEM" } })).statusCode, 404);
 
-  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { devolucoes: Array<{ id: number; etapasFeitas: number }> };
+  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { devolucoes: Array<{ id: number; etapasFeitas: number; etapas: Array<{ chave: string; feita: boolean; detalhe: string }> }> };
   assert.equal(lista.devolucoes.find((d) => d.id === id)!.etapasFeitas, 4);
+  const etapas = lista.devolucoes.find((d) => d.id === id)!.etapas;
+  assert.deepEqual(etapas.map((e) => e.chave), ["sac", "vera", "dirceu", "decisao", "financeiro"]);
+  assert.deepEqual(etapas.map((e) => e.feita), [true, true, false, true, true]);
+  assert.equal(etapas[3].detalhe, "Mantém o pedido");
+  assert.equal(etapas[4].detalhe, "Devolução ainda não realizada");
 });
 
 test("prints das ações: anexa imagem, serve de volta, recusa o que não é imagem e some junto com a devolução", async () => {

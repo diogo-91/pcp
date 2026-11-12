@@ -164,6 +164,7 @@ function montarAba() {
           <button type="button" class="pb-botao" data-atualizar>${ICONE.atualizar} Atualizar</button>
           <details class="pb-menu"><summary class="pb-botao pb-botao-icone" aria-label="Mais opções">${ICONE.mais}</summary>
             <div class="pb-menu-caixa"><button type="button" data-exportar>Exportar CSV da lista</button></div></details>
+          ${P.aba === 'devolucoes' ? `<button type="button" class="pb-botao pb-botao-acoes" data-escolher-acoes>${ICONE.etapas} Ações</button>` : ''}
           <button type="button" class="pb-novo" data-novo><b>+</b> Adicionar</button>
         </div>
       </div>
@@ -279,6 +280,15 @@ function registrosFiltrados() {
   });
 }
 
+/** Coluna "Etapas": as 5 etapas do atendimento, as feitas em amarelo; clicar abre as Ações. */
+function etapasHtml(r) {
+  const lista = r.etapas || [];
+  const feitas = r.etapasFeitas || 0;
+  return `<button type="button" class="pb-etapas" data-acoes="${r.id}" aria-label="Ações do pedido ${r.numeroPedido}: ${feitas} de 5 etapas">
+    ${lista.map((e) => `<span class="pb-et${e.feita ? ' on' : ''}" title="${esc(e.nome)}${e.detalhe ? `: ${esc(e.detalhe)}` : e.feita ? '' : ': ainda não preenchida'}">${esc(e.nome)}</span>`).join('')}
+    <i>${feitas}/5</i></button>`;
+}
+
 function renderLista() {
   const alvo = $('pb-lista');
   if (!alvo) return;
@@ -297,15 +307,16 @@ function renderLista() {
     .map(
       (r) => `<tr data-id="${r.id}">
         <td><b>${r.numeroPedido}</b>${r.cliente ? `<span class="pb-sub">${esc(r.cliente)}</span>` : ''}</td>
+        ${P.aba === 'devolucoes' ? `<td>${etapasHtml(r)}</td>` : ''}
         ${t.campos.map((c) => (c.tipo === 'status'
           ? `<td>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td>`
           : `<td><input class="pb-in" type="${c.tipo}" data-campo="${c.k}" value="${esc(r[c.k] ?? '')}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"></td>`)).join('')}
-        <td class="pb-acoes">${P.aba === 'devolucoes' ? `<button type="button" class="pb-acoes-btn" data-acoes="${r.id}" title="Etapas do atendimento desta devolução" aria-label="Ações do pedido ${r.numeroPedido}: ${r.etapasFeitas || 0} de 5 etapas">${ICONE.etapas} Ações <i>${r.etapasFeitas || 0}/5</i></button>` : ''}<button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">${ICONE.lixo}<span>Excluir</span></button></td></tr>`
+        <td class="pb-acoes"><button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">${ICONE.lixo}<span>Excluir</span></button></td></tr>`
     )
     .join('');
 
   alvo.innerHTML = `<div class="pb-tabela-wrap"><table class="pb-tabela">
-    <thead><tr><th>Número do pedido</th>${t.campos.map((c) => `<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr></thead>
+    <thead><tr><th>Número do pedido</th>${P.aba === 'devolucoes' ? '<th>Etapas</th>' : ''}${t.campos.map((c) => `<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr></thead>
     <tbody>${linhas}</tbody></table></div>
     <div class="pb-rodape">${lista.length} ${lista.length === 1 ? 'registro' : 'registros'}${lista.length !== total ? ` de ${total}` : ''}</div>`;
 }
@@ -500,7 +511,8 @@ raiz.addEventListener('click', (e) => {
   if (e.target.closest('[data-atualizar]')) return void carregar();
   if (e.target.closest('[data-novo]')) return abrirModal();
   if (e.target.closest('[data-fechar]')) return e.target.closest('dialog')?.close();
-  if (e.target.id === 'pb-modal' || e.target.id === 'pb-acoes-modal') return e.target.close(); // clicar fora também fecha
+  if (e.target.id === 'pb-modal' || e.target.id === 'pb-acoes-modal' || e.target.id === 'pb-escolha-modal') return e.target.close(); // clicar fora também fecha
+  if (e.target.closest('[data-escolher-acoes]')) return abrirEscolhaAcoes();
   const ac = e.target.closest('[data-acoes]');
   if (ac) return void abrirAcoes(ac.dataset.acoes);
   const prox = e.target.closest('#ac-proxima');
@@ -693,6 +705,7 @@ async function abrirAcoes(id) {
   const r = P.dados.devolucoes.find((x) => String(x.id) === String(id));
   if (!r) return;
   try {
+    if ($('pb-escolha-modal').open) $('pb-escolha-modal').close();
     AC.id = Number(id);
     AC.sujo.clear();
     AC.revelar = 0;
@@ -714,10 +727,23 @@ function atualizarEtapas() {
   const r = P.dados.devolucoes.find((x) => x.id === AC.id);
   if (r) {
     r.etapasFeitas = d.feitas;
-    const i = document.querySelector(`[data-acoes="${AC.id}"] i`);
-    if (i) i.textContent = `${d.feitas}/5`;
+    r.etapas = ETAPAS_DETALHE(d);
+    const celula = document.querySelector(`#pb-lista tr[data-id="${AC.id}"] .pb-etapas`);
+    if (celula) celula.closest('td').innerHTML = etapasHtml(r);
   }
 }
+
+const ETAPAS_DETALHE = (d) => {
+  const rot = (t, n) => [t ? (t.length > 80 ? `${t.slice(0, 80)}…` : t) : '', n ? `${n} print${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+  const dt = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+  return [
+    { nome: 'SAC', feita: etapaFeita('sac', d), detalhe: [d.sac.quem && `Atendeu: ${d.sac.quem}`, rot(d.sac.conversa, d.sac.prints.length)].filter(Boolean).join(' · ') },
+    { nome: 'Vera', feita: etapaFeita('vera', d), detalhe: rot(d.vera.conversa, d.vera.prints.length) },
+    { nome: 'Dirceu', feita: etapaFeita('dirceu', d), detalhe: rot(d.dirceu.conversa, d.dirceu.prints.length) },
+    { nome: 'Decisão', feita: etapaFeita('decisao', d), detalhe: d.decisao === 'MANTEM' ? 'Mantém o pedido' : d.decisao === 'CANCELAR' ? 'Cliente quer cancelar' : '' },
+    { nome: 'Financeiro', feita: etapaFeita('financeiro', d), detalhe: d.financeiro.realizada === 'SIM' ? `Devolução realizada${d.financeiro.data ? ` em ${dt(d.financeiro.data)}` : ''}` : d.financeiro.realizada === 'NAO' ? 'Devolução ainda não realizada' : '' },
+  ];
+};
 
 function marcarSalvo(texto, erroMsg = false) {
   const el = $('ac-salvo');
@@ -862,3 +888,25 @@ $('pb-acoes-modal').addEventListener('close', () => {
   AC.urls.clear();
   renderLista();
 });
+
+// ---- botão "Ações" do topo: escolhe a devolução e abre as etapas dela
+function abrirEscolhaAcoes() {
+  const m = $('pb-escolha-modal');
+  m.innerHTML = `<div class="pb-modal-topo"><span class="pb-ico verde">${ICONE.etapas}</span><div><h3>Ações da devolução</h3><p>Escolha a devolução para registrar as etapas do atendimento.</p></div>
+    <button type="button" class="pb-fechar" data-fechar aria-label="Fechar">×</button></div>
+    <div class="pb-cadastro"><div class="pb-entrada-icone">${ICONE.busca}<input id="pb-escolha-q" type="search" autocomplete="off" placeholder="Pedido ou cliente"></div>
+    <ul class="pb-escolha" id="pb-escolha-lista"></ul></div>`;
+  renderEscolha('');
+  m.showModal();
+  $('pb-escolha-q').focus();
+}
+
+function renderEscolha(q) {
+  const t = q.trim().toLowerCase();
+  const lista = P.dados.devolucoes.filter((r) => r.status !== 'REALIZADA' && (!t || `${r.numeroPedido} ${r.cliente}`.toLowerCase().includes(t)));
+  $('pb-escolha-lista').innerHTML = lista.length
+    ? lista.map((r) => `<li><button type="button" data-acoes="${r.id}"><b>${r.numeroPedido}</b><span>${esc(r.cliente || 'sem nome')}</span><i>${r.etapasFeitas || 0}/5</i></button></li>`).join('')
+    : '<li class="pb-nada">Nenhuma devolução em aberto. Use "Adicionar" para cadastrar.</li>';
+}
+
+$('pb-escolha-modal').addEventListener('input', (e) => { if (e.target.id === 'pb-escolha-q') renderEscolha(e.target.value); });

@@ -3,7 +3,7 @@ import { inTransaction } from "./db";
 import { diasEntre, hojeEmSaoPaulo, isDataPlausivel } from "./prazo";
 import { reaisParaCentavos } from "./programacao/regras";
 import type { NomusLeitor } from "./sync";
-import { AcoesDevolucaoService } from "./problematicos-acoes";
+import { AcoesDevolucaoService, resumirEtapas } from "./problematicos-acoes";
 
 type Linha = Record<string, unknown>;
 
@@ -289,8 +289,12 @@ export class ProblematicosService {
       (this.db.prepare(`SELECT * FROM ${TABELAS[tipo].tabela} ORDER BY id DESC`).all() as Linha[]).map((l) => this.paraSaida(tipo, l));
     const dados = { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
     // Cada devolução mostra no botão "Ações" quantas das 5 etapas já têm algo preenchido.
-    const feitas = this.acoes.feitasPorDevolucao();
-    for (const d of dados.devolucoes) d.etapasFeitas = feitas.get(d.id as number) ?? 0;
+    const etapas = this.acoes.etapasPorDevolucao();
+    for (const d of dados.devolucoes) {
+      const e = etapas.get(d.id as number) ?? resumirEtapas(this.acoes.vazio());
+      d.etapas = e;
+      d.etapasFeitas = e.filter((x) => x.feita).length;
+    }
     const hoje = hojeEmSaoPaulo(this.agora());
     return {
       hoje,

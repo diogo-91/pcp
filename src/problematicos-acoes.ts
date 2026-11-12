@@ -72,6 +72,11 @@ export class AcoesDevolucaoService {
     }));
   }
 
+  /** Ações em branco (devolução que ainda não tem nada registrado). */
+  vazio(): AcoesDevolucao {
+    return { sac: { quem: "", conversa: "", prints: [] }, vera: { conversa: "", prints: [] }, dirceu: { conversa: "", prints: [] }, decisao: "", financeiro: { realizada: "", data: null }, feitas: 0, atualizadoEm: null, atualizadoPor: null };
+  }
+
   obter(id: number): AcoesDevolucao {
     this.garantirDevolucao(id);
     const a = this.db.prepare("SELECT * FROM pcp_devolucao_acao WHERE devolucao_id = ?").get(id) as Linha | undefined;
@@ -90,30 +95,14 @@ export class AcoesDevolucaoService {
     return resultado;
   }
 
-  /** Quantas etapas já têm algo, de todas as devoluções de uma vez (para o botão "Ações 2/5" da lista). */
-  feitasPorDevolucao(): Map<number, number> {
-    const comPrint = new Map<number, Set<string>>();
-    for (const p of this.db.prepare("SELECT DISTINCT devolucao_id, etapa FROM pcp_devolucao_print").all() as Linha[]) {
-      const id = p.devolucao_id as number;
-      if (!comPrint.has(id)) comPrint.set(id, new Set());
-      comPrint.get(id)!.add(p.etapa as string);
-    }
-    const linhas = new Map<number, Linha>();
-    for (const a of this.db.prepare("SELECT * FROM pcp_devolucao_acao").all() as Linha[]) linhas.set(a.devolucao_id as number, a);
-
-    const mapa = new Map<number, number>();
-    for (const id of new Set([...comPrint.keys(), ...linhas.keys()])) {
-      const a = linhas.get(id) ?? {};
-      const tem = (c: string) => String(a[c] ?? "").trim() !== "";
-      const print = (e: string) => comPrint.get(id)?.has(e) ?? false;
-      mapa.set(
-        id,
-        (tem("sac_quem") || tem("sac_conversa") || print("sac") ? 1 : 0) +
-          (tem("vera_conversa") || print("vera") ? 1 : 0) +
-          (tem("dirceu_conversa") || print("dirceu") ? 1 : 0) +
-          (tem("decisao") ? 1 : 0) +
-          (tem("fin_realizada") ? 1 : 0)
-      );
+  /** Situação das 5 etapas de cada devolução que já tem algo (para a coluna "Etapas" da lista). */
+  etapasPorDevolucao(): Map<number, EtapaResumo[]> {
+    const ids = new Set<number>();
+    for (const r of this.db.prepare("SELECT devolucao_id FROM pcp_devolucao_acao UNION SELECT devolucao_id FROM pcp_devolucao_print").all() as Linha[]) ids.add(r.devolucao_id as number);
+    const mapa = new Map<number, EtapaResumo[]>();
+    for (const id of ids) {
+      if (!this.db.prepare("SELECT 1 FROM pcp_devolucao WHERE id = ?").get(id)) continue;
+      mapa.set(id, resumirEtapas(this.obter(id)));
     }
     return mapa;
   }
@@ -202,6 +191,32 @@ export class AcoesDevolucaoService {
     this.db.prepare("DELETE FROM pcp_devolucao_print WHERE devolucao_id = ?").run(id);
     this.db.prepare("DELETE FROM pcp_devolucao_acao WHERE devolucao_id = ?").run(id);
   }
+}
+
+export interface EtapaResumo {
+  chave: "sac" | "vera" | "dirceu" | "decisao" | "financeiro";
+  nome: string;
+  feita: boolean;
+  /** Texto curto do que foi registrado (aparece ao passar o mouse), ex.: "Cliente quer cancelar". */
+  detalhe: string;
+}
+
+const dataBr = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
+
+export function resumirEtapas(a: AcoesDevolucao): EtapaResumo[] {
+  const conversa = (t: string, prints: number) => [t ? (t.length > 80 ? `${t.slice(0, 80)}…` : t) : "", prints ? `${prints} print${prints > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
+  return [
+    { chave: "sac", nome: "SAC", feita: !!(a.sac.quem || a.sac.conversa || a.sac.prints.length), detalhe: [a.sac.quem && `Atendeu: ${a.sac.quem}`, conversa(a.sac.conversa, a.sac.prints.length)].filter(Boolean).join(" · ") },
+    { chave: "vera", nome: "Vera", feita: !!(a.vera.conversa || a.vera.prints.length), detalhe: conversa(a.vera.conversa, a.vera.prints.length) },
+    { chave: "dirceu", nome: "Dirceu", feita: !!(a.dirceu.conversa || a.dirceu.prints.length), detalhe: conversa(a.dirceu.conversa, a.dirceu.prints.length) },
+    { chave: "decisao", nome: "Decisão", feita: !!a.decisao, detalhe: a.decisao === "MANTEM" ? "Mantém o pedido" : a.decisao === "CANCELAR" ? "Cliente quer cancelar" : "" },
+    {
+      chave: "financeiro",
+      nome: "Financeiro",
+      feita: !!a.financeiro.realizada,
+      detalhe: a.financeiro.realizada === "SIM" ? `Devolução realizada${a.financeiro.data ? ` em ${dataBr(a.financeiro.data)}` : ""}` : a.financeiro.realizada === "NAO" ? "Devolução ainda não realizada" : "",
+    },
+  ];
 }
 
 function contarEtapas(a: AcoesDevolucao): number {

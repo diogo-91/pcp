@@ -426,3 +426,15 @@
 @keyframes ac-entra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.ac-etapa:not([hidden]){animation:none}}
 .ac-mais [hidden]{display:none!important}
+.pb-etapas{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;padding:4px 6px;border:1px solid transparent;border-radius:10px;background:none;cursor:pointer}
+.pb-etapas:hover{background:#fffbe3;border-color:#fbc41a}
+.pb-et{padding:2px 8px;border-radius:999px;background:#eef1f5;color:#8b99a8;font-size:10.5px;font-weight:750}
+.pb-et.on{background:#ffd633;color:#2b1d00}
+.pb-etapas i{font-style:normal;margin-left:2px;font-size:10.5px;font-weight:800;color:#6b7c8d}
+.pb-botao-acoes{display:inline-flex;align-items:center;gap:6px;border-color:#fbc41a;background:#fff6bf;color:#6b4a00;font-weight:800}
+.pb-botao-acoes svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pb-escolha{list-style:none;margin:10px 0 0;padding:0;max-height:46vh;overflow:auto}
+.pb-escolha button{display:grid;grid-template-columns:70px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;padding:9px 10px;border:0;border-bottom:1px solid #eef1f5;background:none;font-size:13px}
+.pb-escolha button:hover{background:#fffbe3}
+.pb-escolha i{font-style:normal;padding:1px 8px;border-radius:999px;background:#ffd633;color:#2b1d00;font-size:11px;font-weight:800}
+.pb-etapas{flex-wrap:nowrap;white-space:nowrap}.pb-et{padding:2px 7px;font-size:10px}
