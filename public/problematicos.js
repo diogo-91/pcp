@@ -503,6 +503,8 @@ raiz.addEventListener('click', (e) => {
   if (e.target.id === 'pb-modal' || e.target.id === 'pb-acoes-modal') return e.target.close(); // clicar fora também fecha
   const ac = e.target.closest('[data-acoes]');
   if (ac) return void abrirAcoes(ac.dataset.acoes);
+  const prox = e.target.closest('#ac-proxima');
+  if (prox) { AC.revelar = Math.max(AC.revelar, ORDEM_ETAPAS.indexOf(prox.dataset.proxima)); aplicarVisibilidade(); return void document.querySelector(`#pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] textarea, #pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] input`)?.focus(); }
   const delPrint = e.target.closest('[data-del-print]');
   if (delPrint) return void removerPrint(delPrint.dataset.delPrint);
   const verPrint = e.target.closest('[data-ver-print]');
@@ -577,7 +579,8 @@ const ETAPAS_ACOES = [
   { k: 'dirceu', n: 3, titulo: 'Dirceu', prints: true },
 ];
 
-const AC = { id: null, dados: null, sujo: new Map(), fila: Promise.resolve(), timer: null, urls: new Map(), enviando: new Set() };
+const ORDEM_ETAPAS = ['sac', 'vera', 'dirceu', 'decisao', 'financeiro'];
+const AC = { revelar: 0, id: null, dados: null, sujo: new Map(), fila: Promise.resolve(), timer: null, urls: new Map(), enviando: new Set() };
 
 const etapaFeita = (k, d) => {
   if (k === 'sac') return !!(d.sac.quem || d.sac.conversa || d.sac.prints.length);
@@ -608,6 +611,36 @@ function blocoPrints(k) {
   return `<div class="ac-anexo"><label class="ac-anexar">${ICONE.clipe} Anexar print<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-arquivo="${k}"></label>
     <span class="ac-dica">ou cole com Ctrl+V</span></div><div class="ac-prints" id="ac-prints-${k}">${miniaturasHtml(k)}</div>`;
 }
+
+/**
+ * Fluxo condicional: cada etapa aparece quando a anterior tem algo (ou quando a pessoa pede "Próxima etapa", para poder pular uma).
+ * O Financeiro só aparece se o cliente decidiu cancelar; se manteve o pedido não há devolução a fazer.
+ */
+function etapaVisivel(k, d) {
+  const i = ORDEM_ETAPAS.indexOf(k);
+  if (i === 0 || etapaFeita(k, d)) return true;
+  if (k === 'financeiro') return d.decisao === 'CANCELAR';
+  return etapaFeita(ORDEM_ETAPAS[i - 1], d) || AC.revelar >= i;
+}
+
+function aplicarVisibilidade() {
+  const d = AC.dados;
+  let ultima = 'sac';
+  for (const k of ORDEM_ETAPAS) {
+    const sec = document.querySelector(`#pb-acoes-modal [data-etapa="${k}"]`);
+    const ver = etapaVisivel(k, d);
+    if (sec.hidden === ver) sec.hidden = !ver;
+    if (ver && k !== 'financeiro') ultima = k;
+  }
+  const proxima = ORDEM_ETAPAS[ORDEM_ETAPAS.indexOf(ultima) + 1];
+  const botao = $('ac-proxima');
+  const falta = proxima && proxima !== 'financeiro' && !etapaVisivel(proxima, d);
+  botao.hidden = !falta;
+  if (falta) { botao.dataset.proxima = proxima; botao.textContent = `Próxima etapa: ${NOME_ETAPA[proxima]} ›`; }
+  $('ac-aviso-fin').hidden = !(etapaVisivel('decisao', d) && d.decisao === 'MANTEM');
+}
+
+const NOME_ETAPA = { vera: 'Vera', dirceu: 'Dirceu', decisao: 'Decisão' };
 
 function progressoHtml() {
   const d = AC.dados;
@@ -649,8 +682,11 @@ function renderAcoes(r) {
         </div>
       </section>
     </div>
+    <div class="ac-mais"><button type="button" class="pb-botao" id="ac-proxima" data-proxima hidden></button>
+      <p class="ac-aviso" id="ac-aviso-fin" hidden>Como o pedido foi mantido, não há devolução a fazer: a etapa Financeiro só aparece se o cliente quiser cancelar.</p></div>
     <div class="ac-rodape"><span id="ac-salvo" class="ac-salvo" role="status">Salvo automaticamente</span><button type="button" class="pb-botao" data-fechar>Fechar</button></div>`;
   carregarMiniaturas();
+  aplicarVisibilidade();
 }
 
 async function abrirAcoes(id) {
@@ -659,6 +695,7 @@ async function abrirAcoes(id) {
   try {
     AC.id = Number(id);
     AC.sujo.clear();
+    AC.revelar = 0;
     AC.enviando.clear();
     AC.dados = await api(`/api/problematicos/devolucoes/${id}/acoes`);
     renderAcoes(r);
@@ -672,6 +709,7 @@ async function abrirAcoes(id) {
 function atualizarEtapas() {
   const d = AC.dados;
   $('ac-prog').innerHTML = progressoHtml();
+  aplicarVisibilidade();
   for (const sec of document.querySelectorAll('#pb-acoes-modal [data-etapa]')) sec.classList.toggle('feita', etapaFeita(sec.dataset.etapa, d));
   const r = P.dados.devolucoes.find((x) => x.id === AC.id);
   if (r) {
@@ -719,6 +757,7 @@ function campoAcoes(el, agora) {
   if (el.type === 'radio') {
     if (!el.checked) return;
     AC.sujo.set(campo, el.value);
+    if (campo === 'decisao') { AC.dados.decisao = el.value; aplicarVisibilidade(); } // aparece/some o Financeiro na hora
     if (campo === 'finRealizada') {
       const caixa = $('ac-fin-data');
       caixa.hidden = el.value !== 'SIM';
