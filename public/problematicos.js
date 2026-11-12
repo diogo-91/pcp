@@ -24,6 +24,7 @@ const ICONE = {
   mais: svg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
   etapas: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>'),
   clipe: svg('<path d="m21 11-9 9a5.5 5.5 0 0 1-8-8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8-8"/>'),
+  relogio: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   lixo: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
 };
 
@@ -79,12 +80,7 @@ const TABELAS = {
   },
 };
 
-const OPCOES_DATA = {
-  futura: [['', 'Todas as datas'], ['vencidas', 'Vencidas'], ['hoje', 'Hoje'], ['semana', 'Próximos 7 dias'], ['sem', 'Sem data']],
-  cadastro: [['', 'Todas as datas'], ['hoje', 'Cadastradas hoje'], ['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias']],
-};
-
-const filtroInicial = () => ({ q: '', data: '', status: 'pendentes' });
+const filtroInicial = () => ({ q: '', de: '', ate: '', status: 'pendentes', ordem: 'recentes' });
 
 const P = {
   aba: 'urgentes',
@@ -92,47 +88,14 @@ const P = {
   resumo: null,
   hoje: '',
   sel: { urgentes: null, devolucoes: null, defeitos: null },
+  selecionado: { urgentes: null, devolucoes: null, defeitos: null }, // registro aberto no painel da direita
   f: { urgentes: filtroInicial(), devolucoes: filtroInicial(), defeitos: filtroInicial() },
   atualizadoEm: null,
   montada: null,
   timer: null,
 };
 
-// ---------------------------------------------------------------- indicadores, abas e cabeçalho
-
-function sparkline(serie, cor) {
-  const max = Math.max(1, ...serie);
-  const w = 130, h = 46, pad = 5;
-  const pts = serie.map((v, i) => [pad + (i * (w - 2 * pad)) / (serie.length - 1), h - pad - (v / max) * (h - 2 * pad)]);
-  const linha = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-  const [ux, uy] = pts[pts.length - 1];
-  return `<svg class="pb-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><defs><linearGradient id="g-${cor}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--c-${cor})" stop-opacity=".28"/><stop offset="1" style="stop-color:var(--c-${cor})" stop-opacity="0"/></linearGradient></defs>
-    <path d="${linha} L${ux.toFixed(1)} ${h} L${pts[0][0].toFixed(1)} ${h} Z" fill="url(#g-${cor})"/><path d="${linha}" fill="none" stroke="var(--c-${cor})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="${ux.toFixed(1)}" cy="${uy.toFixed(1)}" r="3.2" fill="var(--c-${cor})"/></svg>`;
-}
-
-function tendencia(r) {
-  if (r.anteriores7 === 0 && r.ultimos7 === 0) return { cls: 'igual', txt: 'sem novos' };
-  if (r.anteriores7 === 0) return { cls: 'sobe', txt: `+${r.ultimos7} novos` };
-  const pct = Math.round(((r.ultimos7 - r.anteriores7) / r.anteriores7) * 100);
-  if (pct === 0) return { cls: 'igual', txt: '= igual' };
-  return pct > 0 ? { cls: 'sobe', txt: `↑ +${pct}%` } : { cls: 'desce', txt: `↓ −${Math.abs(pct)}%` };
-}
-
-function renderKpis() {
-  if (!P.resumo) return;
-  $('pb-kpis').innerHTML = Object.entries(TABELAS)
-    .map(([k, t]) => {
-      const r = P.resumo[k];
-      const tr = tendencia(r);
-      return `<button type="button" class="pb-kpi${k === P.aba ? ' ativo' : ''}" data-aba="${k}" title="vs. últimos 7 dias" aria-label="${esc(t.aba)}: ${r.pendentes} pendentes">
-        <span class="pb-ico ${t.cor}">${ICONE[t.icone]}</span>
-        <div class="pb-kpi-meio"><b>${esc(t.aba.replace('Pedidos ', '').replace('de ', ''))}</b>
-          <div class="pb-kpi-num"><strong>${r.pendentes}</strong><span class="pb-trend ${tr.cls}" title="Novos cadastros: últimos 7 dias contra os 7 anteriores">${esc(tr.txt)}</span></div></div>
-        ${sparkline(r.serie, t.cor === 'verde' ? 'verde' : 'ouro')}</button>`;
-    })
-    .join('');
-}
+// ---------------------------------------------------------------- abas e cabeçalho
 
 function renderAbas() {
   $('pb-abas').innerHTML = Object.entries(TABELAS)
@@ -148,37 +111,54 @@ function renderSync() {
   $('pb-sync-txt').textContent = h ? `Registros do PCP · atualizados às ${h.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}` : 'Carregando…';
 }
 
-// ---------------------------------------------------------------- cartões da aba (montados uma vez por aba)
+// ---------------------------------------------------------------- layout: filtros | fila | detalhes
+
+const COLUNAS = {
+  urgentes: [{ k: 'dataEntregaCombinada', rot: 'Data de entrega', tipo: 'data' }],
+  devolucoes: [{ k: 'formaPagamento', rot: 'Forma de pagamento' }, { k: 'valor', rot: 'Valor (R$)', tipo: 'brl' }, { k: 'etapas', rot: 'Etapas', tipo: 'etapas' }],
+  defeitos: [{ k: 'causa', rot: 'Causa' }, { k: 'motorista', rot: 'Motorista' }, { k: 'prazoAcao', rot: 'Prazo da ação', tipo: 'data' }],
+};
+
+const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
 function montarAba() {
   const t = TABELAS[P.aba];
   P.montada = P.aba;
   const f = P.f[P.aba];
+  const periodo = t.data.tipo === 'cadastro' ? 'do cadastro' : t.data.rotulo.toLowerCase().replace(/^data /, 'da ').replace(/^prazo /, 'do prazo ');
+  const ordens = [['recentes', 'Mais recentes'], ['data', t.data.tipo === 'futura' ? `${t.data.rotulo} (mais próxima)` : 'Data do cadastro (mais antiga)'], ['pedido', 'Número do pedido']];
 
-  // A tela mostra só a tabela; o cadastro abre num modal (botão "Adicionar").
   $('pb-grid').innerHTML = `
+  <div class="pb-layout">
+    <aside class="pb-card pb-lateral" aria-label="Filtros">
+      <div class="pb-lateral-topo"><b>${ICONE.filtro} Filtros</b><button type="button" class="pb-link" data-limpar>Limpar filtros</button></div>
+      <label class="pb-lcampo">Buscar por pedido ou cliente
+        <div class="pb-entrada-icone">${ICONE.busca}<input id="pb-fq" type="search" placeholder="Nº do pedido ou nome do cliente" value="${esc(f.q)}"></div></label>
+      <div class="pb-lcampo">Período ${esc(periodo)}
+        <div class="pb-periodo"><input type="date" id="pb-fde" value="${esc(f.de)}" aria-label="Data inicial"><span>até</span><input type="date" id="pb-fate" value="${esc(f.ate)}" aria-label="Data final"></div></div>
+      <label class="pb-lcampo">Status
+        <select id="pb-fstatus"><option value="pendentes">Não realizadas</option><option value="realizadas">Realizadas</option><option value="todas">Todas</option></select></label>
+      <label class="pb-check"><input type="checkbox" id="pb-fmostrar"> Mostrar realizadas (<span id="pb-n-real">0</span>)</label>
+      <div class="pb-lcampo">Atalhos<div class="pb-atalhos" id="pb-atalhos"></div></div>
+    </aside>
+
     <article class="pb-card pb-listagem">
       <div class="pb-card-topo">
-        <span class="pb-ico ${t.cor}">${ICONE.lista}</span><div><h3>${esc(t.listaTitulo)}</h3><p>${esc(t.listaSub)}</p></div>
+        <span class="pb-ico ${t.cor}">${ICONE.lista}</span><div><h3>${esc(t.listaTitulo)} <span class="pb-contagem" id="pb-contagem"></span></h3><p>${esc(t.listaSub)}</p></div>
         <div class="pb-topo-acoes">
-          <button type="button" class="pb-botao" data-atualizar>${ICONE.atualizar} Atualizar</button>
+          <label class="pb-ordem">Ordenar por <select id="pb-fordem" aria-label="Ordenar">${ordens.map(([v, n]) => `<option value="${v}"${v === f.ordem ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+          <button type="button" class="pb-botao pb-botao-icone" data-atualizar title="Atualizar" aria-label="Atualizar">${ICONE.atualizar}</button>
           <details class="pb-menu"><summary class="pb-botao pb-botao-icone" aria-label="Mais opções">${ICONE.mais}</summary>
             <div class="pb-menu-caixa"><button type="button" data-exportar>Exportar CSV da lista</button></div></details>
           ${P.aba === 'devolucoes' ? `<button type="button" class="pb-botao pb-botao-acoes" data-escolher-acoes>${ICONE.etapas} Ações</button>` : ''}
           <button type="button" class="pb-novo" data-novo><b>+</b> Adicionar</button>
         </div>
       </div>
-      <div class="pb-filtros">
-        <span class="pb-filtros-rotulo">${ICONE.filtro} Filtros rápidos</span>
-        <div class="pb-entrada-icone pb-filtro-busca">${ICONE.busca}<input id="pb-fq" type="search" placeholder="Pedido ou cliente" value="${esc(f.q)}" aria-label="Filtrar por pedido ou cliente"></div>
-        <label class="pb-select-icone">${ICONE.calendario}<select id="pb-fdata" aria-label="Filtrar por ${esc(t.data.rotulo)}">${OPCOES_DATA[t.data.tipo].map(([v, n]) => `<option value="${v}"${v === f.data ? ' selected' : ''}>${v === '' ? esc(t.data.rotulo) : esc(n)}</option>`).join('')}</select></label>
-        <label class="pb-select-icone">${ICONE.camadas}<select id="pb-fstatus" aria-label="Filtrar por status">
-          <option value="pendentes"${f.status === 'pendentes' ? ' selected' : ''}>Não realizadas</option>
-          <option value="realizadas"${f.status === 'realizadas' ? ' selected' : ''}>Realizadas</option>
-          <option value="todas"${f.status === 'todas' ? ' selected' : ''}>Todas</option></select></label>
-      </div>
       <div id="pb-lista"></div>
-    </article>`;
+    </article>
+
+    <aside class="pb-card pb-detalhe" id="pb-detalhe" aria-label="Detalhes do pedido"></aside>
+  </div>`;
 }
 
 // ---------------------------------------------------------------- modal de cadastro
@@ -263,24 +243,45 @@ function registrosFiltrados() {
     if (f.status === 'pendentes' && r.status === 'REALIZADA') return false;
     if (f.status === 'realizadas' && r.status !== 'REALIZADA') return false;
     if (q && ![r.numeroPedido, r.cliente, r.causa, r.motorista, r.acao, r.formaPagamento].join(' ').toLowerCase().includes(q)) return false;
-    if (f.data) {
+    if (f.de || f.ate) {
       const d = t.data.tipo === 'cadastro' ? diaSP(r[t.data.campo]) : r[t.data.campo];
-      if (t.data.tipo === 'futura') {
-        if (f.data === 'vencidas' && !(d && d < P.hoje)) return false;
-        if (f.data === 'hoje' && d !== P.hoje) return false;
-        if (f.data === 'semana' && !(d && d >= P.hoje && d <= somarDias(P.hoje, 7))) return false;
-        if (f.data === 'sem' && d) return false;
-      } else {
-        if (f.data === 'hoje' && d !== P.hoje) return false;
-        if (f.data === '7' && !(d && d >= somarDias(P.hoje, -6))) return false;
-        if (f.data === '30' && !(d && d >= somarDias(P.hoje, -29))) return false;
-      }
+      if (!d || (f.de && d < f.de) || (f.ate && d > f.ate)) return false;
     }
     return true;
   });
 }
 
-/** Coluna "Etapas": as 5 etapas do atendimento, as feitas em amarelo; clicar abre as Ações. */
+function ordenar(lista) {
+  const t = TABELAS[P.aba];
+  const ordem = P.f[P.aba].ordem;
+  const chave = (r) => (t.data.tipo === 'cadastro' ? diaSP(r.criadoEm) : r[t.data.campo]) || '';
+  const copia = [...lista];
+  if (ordem === 'pedido') return copia.sort((a, b) => b.numeroPedido - a.numeroPedido);
+  if (ordem === 'data') return copia.sort((a, b) => (chave(a) === '' ? 1 : chave(b) === '' ? -1 : chave(a).localeCompare(chave(b))));
+  return copia.sort((a, b) => b.id - a.id);
+}
+
+/** Atalhos e controles da lateral refletem o filtro de status (e mostram as contagens). */
+function sincronizarFiltros() {
+  const f = P.f[P.aba];
+  const dados = P.dados[P.aba];
+  const feitas = dados.filter((r) => r.status === 'REALIZADA').length;
+  const abertas = dados.length - feitas;
+  if ($('pb-fstatus')) $('pb-fstatus').value = f.status;
+  if ($('pb-fmostrar')) $('pb-fmostrar').checked = f.status !== 'pendentes';
+  if ($('pb-n-real')) $('pb-n-real').textContent = feitas;
+  if ($('pb-atalhos')) {
+    $('pb-atalhos').innerHTML = [['todas', 'Todos', dados.length], ['pendentes', 'Não realizada', abertas], ['realizadas', 'Realizada', feitas]]
+      .map(([v, n, c]) => `<button type="button" data-atalho="${v}" class="${f.status === v ? 'on' : ''}">${n} (${c})</button>`).join('');
+  }
+}
+
+/** Mini-indicador das 5 etapas na fila (as feitas em amarelo). */
+const pontosEtapas = (r) =>
+  `<button type="button" class="pb-pontos" data-acoes="${r.id}" aria-label="Ações do pedido ${r.numeroPedido}: ${r.etapasFeitas || 0} de 5 etapas" title="${(r.etapas || []).map((e) => `${e.nome}: ${e.feita ? 'feita' : 'pendente'}`).join(' · ')}">
+    ${(r.etapas || []).map((e) => `<i class="${e.feita ? 'on' : ''}"></i>`).join('')}<b>${r.etapasFeitas || 0}/5</b></button>`;
+
+/** Coluna "Etapas" do painel de detalhes: as 5 etapas, as feitas em amarelo; clicar abre as Ações. */
 function etapasHtml(r) {
   const lista = r.etapas || [];
   const feitas = r.etapasFeitas || 0;
@@ -289,44 +290,101 @@ function etapasHtml(r) {
     <i>${feitas}/5</i></button>`;
 }
 
+function celulaFila(c, r) {
+  if (c.tipo === 'etapas') return pontosEtapas(r);
+  const v = r[c.k];
+  if (c.tipo === 'data') {
+    const atraso = v && v < P.hoje && r.status !== 'REALIZADA' && TABELAS[P.aba].data.tipo === 'futura';
+    return v ? `<span class="${atraso ? 'pb-venc' : ''}">${esc(fmtData(v))}</span>` : '<span class="pb-nulo">—</span>';
+  }
+  if (c.tipo === 'brl') return v === null || v === undefined ? '<span class="pb-nulo">—</span>' : esc(brl(v));
+  return v ? `<span class="pb-trunc" title="${esc(v)}">${esc(v)}</span>` : '<span class="pb-nulo">—</span>';
+}
+
 function renderLista() {
   const alvo = $('pb-lista');
   if (!alvo) return;
   const t = TABELAS[P.aba];
-  const lista = registrosFiltrados();
+  const filtrados = registrosFiltrados();
+  const antes = P.selecionado[P.aba];
+  if (!filtrados.some((r) => r.id === antes)) P.selecionado[P.aba] = filtrados.length ? ordenar(filtrados)[0].id : null;
+  const lista = ordenar(filtrados);
   const total = P.dados[P.aba].length;
+  sincronizarFiltros();
+  if ($('pb-contagem')) $('pb-contagem').textContent = `(${lista.length})`;
+  if (antes !== P.selecionado[P.aba]) renderDetalhe();
 
   if (!lista.length) {
     const filtrando = total > 0;
     alvo.innerHTML = `<div class="pb-vazio">${ILUSTRACAO_VAZIA}<h4>${esc(filtrando ? 'Nenhum registro com esses filtros.' : t.vazio)}</h4>
-      <p>${esc(filtrando ? 'Ajuste os filtros acima para ver outros registros.' : t.vazioSub)}</p></div>`;
+      <p>${esc(filtrando ? 'Ajuste os filtros ao lado para ver outros registros.' : t.vazioSub)}</p></div>`;
     return;
   }
 
+  const cols = COLUNAS[P.aba];
   const linhas = lista
     .map(
-      (r) => `<tr data-id="${r.id}">
-        <td><b>${r.numeroPedido}</b>${r.cliente ? `<span class="pb-sub">${esc(r.cliente)}</span>` : ''}</td>
-        ${P.aba === 'devolucoes' ? `<td>${etapasHtml(r)}</td>` : ''}
-        ${t.campos.map((c) => (c.tipo === 'status'
-          ? `<td>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td>`
-          : `<td><input class="pb-in" type="${c.tipo}" data-campo="${c.k}" value="${esc(r[c.k] ?? '')}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"></td>`)).join('')}
-        <td class="pb-acoes"><button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro" aria-label="Excluir registro do pedido ${r.numeroPedido}">${ICONE.lixo}<span>Excluir</span></button></td></tr>`
+      (r) => `<tr data-id="${r.id}" data-sel="${r.id}" class="${r.id === P.selecionado[P.aba] ? 'sel' : ''}" tabindex="0">
+        <td class="pb-ic ${t.cor}">${ICONE[t.icone]}</td>
+        <td><b>${r.numeroPedido}</b></td>
+        <td class="pb-col-cliente">${esc(r.cliente || '—')}</td>
+        ${cols.map((c) => `<td>${celulaFila(c, r)}</td>`).join('')}
+        <td>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td></tr>`
     )
     .join('');
 
   alvo.innerHTML = `<div class="pb-tabela-wrap"><table class="pb-tabela">
-    <thead><tr><th>Número do pedido</th>${P.aba === 'devolucoes' ? '<th>Etapas</th>' : ''}${t.campos.map((c) => `<th>${esc(c.rotulo)}</th>`).join('')}<th></th></tr></thead>
+    <thead><tr><th></th><th>Pedido</th><th>Cliente</th>${cols.map((c) => `<th>${esc(c.rot)}</th>`).join('')}<th>Status</th></tr></thead>
     <tbody>${linhas}</tbody></table></div>
-    <div class="pb-rodape">${lista.length} ${lista.length === 1 ? 'registro' : 'registros'}${lista.length !== total ? ` de ${total}` : ''}</div>`;
+    <div class="pb-rodape">Exibindo ${lista.length} ${lista.length === 1 ? 'registro' : 'registros'}${lista.length !== total ? ` de ${total}` : ''}</div>`;
+}
+
+function campoDetalhe(c, r) {
+  if (c.tipo === 'status') return '';
+  const val = r[c.k] ?? '';
+  const attrs = `data-campo="${c.k}" aria-label="${esc(c.rotulo)} do pedido ${r.numeroPedido}"`;
+  const longo = c.tipo === 'text' && (c.max || 0) >= 300;
+  const corpo = longo
+    ? `<textarea class="pb-in" rows="2" maxlength="${c.max}" ${attrs}>${esc(val)}</textarea>`
+    : `<input class="pb-in" type="${c.tipo}" value="${esc(val)}" ${c.tipo === 'number' ? 'min="0" step="0.01"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''} ${attrs}>`;
+  return `<label class="pb-det-campo">${esc(c.rotulo)}${corpo}</label>`;
+}
+
+function renderDetalhe() {
+  const alvo = $('pb-detalhe');
+  if (!alvo) return;
+  const t = TABELAS[P.aba];
+  const r = P.dados[P.aba].find((x) => x.id === P.selecionado[P.aba]);
+  if (!r) {
+    alvo.innerHTML = `<div class="pb-det-topo"><span class="pb-ico ${t.cor}">${ICONE.lista}</span><h3>Detalhes do pedido</h3></div>
+      <p class="pb-det-vazio">Selecione um registro na fila para ver os detalhes e editar.</p>`;
+    return;
+  }
+  alvo.innerHTML = `<div class="pb-det-topo"><span class="pb-ico ${t.cor}">${ICONE.lista}</span><h3>Detalhes do pedido</h3></div>
+    <div class="pb-det" data-id="${r.id}">
+      <div class="pb-det-titulo"><h4>Pedido nº ${r.numeroPedido}</h4>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</div>
+      <div class="pb-det-grade">
+        <div><span>Cliente</span><b>${esc(r.cliente || '—')}</b></div>
+        <div><span>Categoria</span><b class="pb-chip-cat">${esc(t.aba.replace('Pedidos ', ''))}</b></div>
+      </div>
+      <div class="pb-det-campos">${t.campos.map((c) => campoDetalhe(c, r)).join('')}</div>
+      ${P.aba === 'devolucoes' ? `<div class="pb-det-sec"><h5>Etapas do atendimento</h5>${etapasHtml(r)}</div>` : ''}
+      <div class="pb-det-sec"><h5>${ICONE.relogio} Histórico</h5>
+        <ul class="pb-hist"><li><i class="on"></i><div><b>Cadastrado</b><small>${esc(quando(r.criadoEm))}</small></div></li>
+          ${r.atualizadoEm && r.atualizadoEm !== r.criadoEm ? `<li><i></i><div><b>Última alteração${r.atualizadoPor ? ` por ${esc(r.atualizadoPor)}` : ''}</b><small>${esc(quando(r.atualizadoEm))}</small></div></li>` : ''}</ul></div>
+      <div class="pb-det-rodape">
+        ${P.aba === 'devolucoes' ? `<button type="button" class="pb-botao pb-botao-acoes" data-acoes="${r.id}">${ICONE.etapas} Abrir ações</button>` : ''}
+        <button type="button" class="pb-excluir" data-remover="${r.id}" title="Excluir este registro">${ICONE.lixo}<span>Excluir</span></button>
+      </div>
+    </div>`;
 }
 
 function renderTudo() {
-  renderKpis();
   renderAbas();
   renderSync();
   if (P.montada !== P.aba) montarAba();
   renderLista();
+  renderDetalhe();
 }
 
 // ---------------------------------------------------------------- dados
@@ -410,12 +468,14 @@ async function adicionar() {
   const aba = P.aba;
   try {
     await window.PCP.programacao?.garantirUsuario?.();
-    aplicar(await api(`/api/problematicos/${aba}`, { method: 'POST', body: JSON.stringify(corpo) }));
+    const criado = await api(`/api/problematicos/${aba}`, { method: 'POST', body: JSON.stringify(corpo) });
+    aplicar(criado);
+    P.selecionado[aba] = criado.id;
     P.sel[aba] = null;
     $('pb-modal').close(); // o cadastro fecha ao concluir
-    renderKpis();
     renderAbas();
     renderLista();
+    renderDetalhe();
     mostrarToast(corpo.status === 'REALIZADA' ? `Pedido ${sel.numero} cadastrado como realizada: oculto da lista.` : `Pedido ${sel.numero} cadastrado em ${t.aba}.`);
   } catch (e) {
     erro(e.message);
@@ -423,7 +483,7 @@ async function adicionar() {
 }
 
 async function salvarLinha(el) {
-  const id = el.closest('tr').dataset.id;
+  const id = el.closest('[data-id]').dataset.id;
   const aba = P.aba;
   const c = TABELAS[aba].campos.find((x) => x.k === el.dataset.campo);
   let v = el.value.trim();
@@ -439,11 +499,11 @@ async function salvarLinha(el) {
     await window.PCP.programacao?.garantirUsuario?.();
     aplicar(await api(`/api/problematicos/${aba}/${id}`, { method: 'PATCH', body: JSON.stringify({ [c.k]: v }) }));
     el.classList.remove('erro');
-    renderKpis();
     renderAbas();
+    renderLista(); // atualiza a linha na fila (e some dela se virou realizada com o filtro "Não realizadas")
     if (c.k === 'status') {
       const numero = P.dados[aba].find((x) => String(x.id) === id)?.numeroPedido;
-      renderLista(); // realizada some da lista (filtro "Não realizadas"); a cor muda nos demais casos
+      renderDetalhe();
       if (v === 'REALIZADA' && P.f[aba].status === 'pendentes') {
         mostrarToast(`Pedido ${numero} marcado como realizada e ocultado.`, async () => {
           try {
@@ -466,7 +526,6 @@ async function remover(id) {
   if (!r || !confirm(`Excluir o registro do pedido ${r.numeroPedido}?`)) return;
   try {
     aplicar(await api(`/api/problematicos/${P.aba}/${id}`, { method: 'DELETE' }));
-    renderKpis();
     renderAbas();
     renderLista();
   } catch (e) {
@@ -506,6 +565,19 @@ const raiz = $('view-problematicos');
 raiz.addEventListener('click', (e) => {
   const ir = e.target.closest('[data-ir]');
   if (ir) return void window.PCP.mostrarView(ir.dataset.ir);
+  const atalho = e.target.closest('[data-atalho]');
+  if (atalho) { P.f[P.aba].status = atalho.dataset.atalho; return renderLista(); }
+  if (e.target.closest('[data-limpar]')) {
+    P.f[P.aba] = { ...filtroInicial(), ordem: P.f[P.aba].ordem };
+    for (const id of ['pb-fq', 'pb-fde', 'pb-fate']) if ($(id)) $(id).value = '';
+    return renderLista();
+  }
+  const linha = e.target.closest('tr[data-sel]');
+  if (linha && !e.target.closest('select, button, input, textarea, a')) {
+    P.selecionado[P.aba] = Number(linha.dataset.sel);
+    for (const tr of document.querySelectorAll('#pb-lista tr[data-sel]')) tr.classList.toggle('sel', tr === linha);
+    return renderDetalhe();
+  }
   const aba = e.target.closest('[data-aba]');
   if (aba) { P.aba = aba.dataset.aba; return renderTudo(); }
   if (e.target.closest('[data-atualizar]')) return void carregar();
@@ -559,15 +631,18 @@ raiz.addEventListener('keydown', (e) => {
 raiz.addEventListener('change', (e) => {
   if (e.target.matches('#pb-acoes-modal [data-ac]')) return void campoAcoes(e.target, true);
   if (e.target.matches('#pb-acoes-modal [data-arquivo]')) { const f = [...e.target.files]; e.target.value = ''; return void anexarArquivos(e.target.dataset.arquivo, f); }
-  if (e.target.id === 'pb-fdata') { P.f[P.aba].data = e.target.value; return renderLista(); }
+  if (e.target.id === 'pb-fde') { P.f[P.aba].de = e.target.value; return renderLista(); }
+  if (e.target.id === 'pb-fate') { P.f[P.aba].ate = e.target.value; return renderLista(); }
+  if (e.target.id === 'pb-fordem') { P.f[P.aba].ordem = e.target.value; return renderLista(); }
+  if (e.target.id === 'pb-fmostrar') { P.f[P.aba].status = e.target.checked ? 'todas' : 'pendentes'; return renderLista(); }
   if (e.target.id === 'pb-fstatus') { P.f[P.aba].status = e.target.value; return renderLista(); }
   if (e.target.id === 'pb-f-status') { e.target.className = `pb-st pb-st-${e.target.value}`; return; }
-  if (e.target.matches('.pb-tabela [data-campo]')) salvarLinha(e.target);
+  if (e.target.matches('.pb-tabela [data-campo], .pb-detalhe [data-campo]')) salvarLinha(e.target);
 });
 
 // Atualiza sozinha (outra pessoa pode ter cadastrado), sem atrapalhar quem está editando uma linha.
 setInterval(() => {
-  if (raiz.hidden || document.hidden || document.activeElement?.closest?.('#pb-lista')) return;
+  if (raiz.hidden || document.hidden || document.activeElement?.closest?.('#pb-lista, #pb-detalhe')) return;
   carregar({ silencioso: true });
 }, 30_000);
 
@@ -728,8 +803,8 @@ function atualizarEtapas() {
   if (r) {
     r.etapasFeitas = d.feitas;
     r.etapas = ETAPAS_DETALHE(d);
-    const celula = document.querySelector(`#pb-lista tr[data-id="${AC.id}"] .pb-etapas`);
-    if (celula) celula.closest('td').innerHTML = etapasHtml(r);
+    renderLista();
+    renderDetalhe();
   }
 }
 
