@@ -313,3 +313,21 @@
 .pb-vazio p{font-size:12px}
 .pb-rodape{font-size:11px}
 #view-problematicos:not([hidden]) ~ .notice{display:none}
+
+/* Só as tabelas na tela; o cadastro abre num modal */
+.pb-grid{grid-template-columns:minmax(0,1fr)}
+.pb-novo{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border:0;border-radius:10px;background:linear-gradient(180deg,#fbc633,#e9a50c);color:#2b1d00;font-size:12.5px;font-weight:850;box-shadow:0 5px 12px #e0a21038}
+.pb-novo b{font-size:16px;line-height:1;font-weight:700}
+.pb-novo:hover{filter:brightness(1.05)}
+.pb-modal{width:min(440px,94vw);max-height:92vh;padding:0;border:0;border-radius:20px;box-shadow:0 24px 70px #15243455;overflow:auto}
+.pb-modal::backdrop{background:#15243466;backdrop-filter:blur(2px)}
+.pb-modal:not([open]){display:none}
+.pb-modal-topo{display:flex;align-items:center;gap:12px;padding:18px 20px 12px}
+.pb-modal-topo h3{margin:0;font-size:16.5px;font-weight:850;letter-spacing:-.3px;color:#18283a}
+.pb-modal-topo p{margin:3px 0 0;font-size:12px;color:#7a8897;line-height:1.4}
+.pb-fechar{margin-left:auto;align-self:flex-start;width:32px;height:32px;border:0;border-radius:50%;background:#f1f3f6;color:#5a6c7e;font-size:20px;line-height:1}
+.pb-fechar:hover{background:#e3e8ee}
+.pb-modal .pb-cadastro{padding:4px 20px 20px}
+.pb-modal-acoes{display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:16px}
+.pb-modal-acoes .pb-botao{height:42px;padding:0 18px;font-size:13px}
+.pb-modal-acoes .pb-adicionar{width:auto;margin-top:0;padding:0 22px;flex:1;max-width:210px}

@@ -154,27 +154,8 @@ function montarAba() {
   P.montada = P.aba;
   const f = P.f[P.aba];
 
-  const campoForm = (c) =>
-    c.tipo === 'status'
-      ? `<div class="pb-campo"><label>${esc(c.rotulo)}</label>${statusSelect('id="pb-f-status"', 'NAO_REALIZADA')}</div>`
-      : `<div class="pb-campo"><label>${esc(c.rotulo)}${c.obrigatorio ? ' <i>*</i>' : ''}</label><input id="pb-f-${c.k}" type="${c.tipo}" ${c.tipo === 'number' ? 'min="0" step="0.01" placeholder="0,00"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''}></div>`;
-
+  // A tela mostra só a tabela; o cadastro abre num modal (botão "Adicionar").
   $('pb-grid').innerHTML = `
-    <article class="pb-card pb-cadastro">
-      <div class="pb-card-topo"><span class="pb-ico ${t.cor}">${ICONE.plus}</span><div><h3>${esc(t.cardTitulo)}</h3><p>${esc(t.cardSub)}</p></div></div>
-      <div class="pb-campos">
-        <div class="pb-campo pb-busca-campo"><label>Número do pedido <i>*</i></label>
-          <div class="pb-entrada-icone" id="pb-entrada">${ICONE.busca}<input id="pb-busca" type="search" autocomplete="off" placeholder="Número ou nome do cliente"></div>
-          <ul class="pb-res" id="pb-res" hidden></ul>
-          <div class="pb-sel" id="pb-sel" hidden></div>
-        </div>
-        ${t.campos.map(campoForm).join('')}
-      </div>
-      <button type="button" class="pb-adicionar" id="pb-add"><b>+</b> Adicionar</button>
-      <div class="pb-dica" id="pb-dica"></div>
-      <div class="pb-erro" id="pb-erro" role="alert"></div>
-    </article>
-
     <article class="pb-card pb-listagem">
       <div class="pb-card-topo">
         <span class="pb-ico ${t.cor}">${ICONE.lista}</span><div><h3>${esc(t.listaTitulo)}</h3><p>${esc(t.listaSub)}</p></div>
@@ -182,6 +163,7 @@ function montarAba() {
           <button type="button" class="pb-botao" data-atualizar>${ICONE.atualizar} Atualizar</button>
           <details class="pb-menu"><summary class="pb-botao pb-botao-icone" aria-label="Mais opções">${ICONE.mais}</summary>
             <div class="pb-menu-caixa"><button type="button" data-exportar>Exportar CSV da lista</button></div></details>
+          <button type="button" class="pb-novo" data-novo><b>+</b> Adicionar</button>
         </div>
       </div>
       <div class="pb-filtros">
@@ -195,7 +177,43 @@ function montarAba() {
       </div>
       <div id="pb-lista"></div>
     </article>`;
+}
+
+// ---------------------------------------------------------------- modal de cadastro
+
+function abrirModal() {
+  const t = TABELAS[P.aba];
+  P.sel[P.aba] = null;
+
+  const campoForm = (c) =>
+    c.tipo === 'status'
+      ? `<div class="pb-campo"><label>${esc(c.rotulo)}</label>${statusSelect('id="pb-f-status"', 'NAO_REALIZADA')}</div>`
+      : `<div class="pb-campo"><label>${esc(c.rotulo)}${c.obrigatorio ? ' <i>*</i>' : ''}</label><input id="pb-f-${c.k}" type="${c.tipo}" ${c.tipo === 'number' ? 'min="0" step="0.01" placeholder="0,00"' : ''} ${c.max ? `maxlength="${c.max}"` : ''} ${c.tipo === 'date' ? 'min="2000-01-01" max="2100-12-31"' : ''}></div>`;
+
+  $('pb-modal').innerHTML = `
+    <div class="pb-modal-topo">
+      <span class="pb-ico ${t.cor}">${ICONE.plus}</span><div><h3>${esc(t.cardTitulo)}</h3><p>${esc(t.cardSub)}</p></div>
+      <button type="button" class="pb-fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="pb-cadastro">
+      <div class="pb-campos">
+        <div class="pb-campo pb-busca-campo"><label>Número do pedido <i>*</i></label>
+          <div class="pb-entrada-icone" id="pb-entrada">${ICONE.busca}<input id="pb-busca" type="search" autocomplete="off" placeholder="Número ou nome do cliente"></div>
+          <ul class="pb-res" id="pb-res" hidden></ul>
+          <div class="pb-sel" id="pb-sel" hidden></div>
+        </div>
+        ${t.campos.map(campoForm).join('')}
+      </div>
+      <div class="pb-dica" id="pb-dica"></div>
+      <div class="pb-erro" id="pb-erro" role="alert"></div>
+      <div class="pb-modal-acoes">
+        <button type="button" class="pb-botao" data-fechar>Cancelar</button>
+        <button type="button" class="pb-adicionar" id="pb-add"><b>+</b> Adicionar</button>
+      </div>
+    </div>`;
   renderSelecao();
+  $('pb-modal').showModal();
+  $('pb-busca').focus();
 }
 
 const selHtml = (s) =>
@@ -382,11 +400,7 @@ async function adicionar() {
     await window.PCP.programacao?.garantirUsuario?.();
     aplicar(await api(`/api/problematicos/${aba}`, { method: 'POST', body: JSON.stringify(corpo) }));
     P.sel[aba] = null;
-    // Limpa o formulário (a tela de cadastro continua montada).
-    for (const c of t.campos) { const el = $(`pb-f-${c.k}`); if (el) el.value = c.tipo === 'status' ? 'NAO_REALIZADA' : ''; }
-    if ($('pb-f-status')) $('pb-f-status').className = 'pb-st pb-st-NAO_REALIZADA';
-    $('pb-busca').value = '';
-    renderSelecao();
+    $('pb-modal').close(); // o cadastro fecha ao concluir
     renderKpis();
     renderAbas();
     renderLista();
@@ -483,6 +497,8 @@ raiz.addEventListener('click', (e) => {
   const aba = e.target.closest('[data-aba]');
   if (aba) { P.aba = aba.dataset.aba; return renderTudo(); }
   if (e.target.closest('[data-atualizar]')) return void carregar();
+  if (e.target.closest('[data-novo]')) return abrirModal();
+  if (e.target.closest('[data-fechar]') || e.target.id === 'pb-modal') return $('pb-modal').close(); // clicar fora também fecha
   if (e.target.closest('[data-exportar]')) { e.target.closest('details')?.removeAttribute('open'); return exportarCsv(); }
   const esc_ = e.target.closest('[data-escolher]');
   if (esc_) { $('pb-res').hidden = true; return void escolher(Number(esc_.dataset.escolher), esc_.dataset.cliente); }
@@ -537,3 +553,7 @@ window.PCP.problematicos = {
     await carregar();
   },
 };
+
+$('pb-modal').addEventListener('close', () => {
+  for (const k of Object.keys(P.sel)) P.sel[k] = null;
+});
