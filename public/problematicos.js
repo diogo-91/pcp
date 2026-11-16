@@ -97,6 +97,7 @@ TABELAS.convertidos = {
 const filtroInicial = () => ({ q: '', de: '', ate: '', status: 'pendentes', ordem: 'recentes' });
 
 const P = {
+  pend: [], // anexos escolhidos no cadastro de um defeito (sobem junto com o registro)
   auto: { forma: '', valor: '', telefone: '' }, // o que o formulário de devolução preencheu sozinho (para trocar ao escolher outro pedido)
   aba: 'urgentes',
   dados: { urgentes: [], devolucoes: [], defeitos: [], convertidos: [] },
@@ -184,6 +185,7 @@ function abrirModal() {
   const t = TABELAS[P.aba];
   P.sel[P.aba] = null;
   P.auto = { forma: '', valor: '', telefone: '' };
+  P.pend = [];
 
   const campoForm = (c) =>
     c.tipo === 'status'
@@ -203,6 +205,10 @@ function abrirModal() {
           <div class="pb-sel" id="pb-sel" hidden></div>
         </div>
         ${t.campos.map(campoForm).join('')}
+        ${P.aba === 'defeitos' ? `<div class="pb-campo"><label>Anexos</label>
+          <div class="ac-anexo"><label class="ac-anexar">${ICONE.clipe} Anexar arquivo<input type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" data-anexo-novo></label>
+            <span class="ac-dica">imagem ou PDF · ou cole com Ctrl+V</span></div>
+          <ul class="pb-anexos" id="pb-pend"></ul></div>` : ''}
       </div>
       <div class="pb-dica" id="pb-dica"></div>
       <div class="pb-erro" id="pb-erro" role="alert"></div>
@@ -518,11 +524,20 @@ async function adicionar() {
     else if (v !== '' || c.obrigatorio) corpo[c.k] = v;
   }
   const aba = P.aba;
+  $('pb-add').disabled = true; // evita cadastrar duas vezes enquanto os anexos sobem
   try {
     await window.PCP.programacao?.garantirUsuario?.();
     const criado = await api(`/api/problematicos/${rota(aba)}`, { method: 'POST', body: JSON.stringify(corpo) });
     aplicar(criado);
     P.selecionado[aba] = criado.id;
+    // Anexos escolhidos no cadastro: sobem agora que o registro existe (se algum falhar, o registro fica e o painel permite reenviar).
+    let falhas = 0;
+    for (const a of aba === 'defeitos' ? P.pend : []) {
+      try { aplicar(await api(`/api/problematicos/defeitos/${criado.id}/anexos`, { method: 'POST', body: JSON.stringify(a) })); }
+      catch (e2) { falhas++; mostrarToast(`Anexo "${a.nome}" não subiu: ${e2.message}`); }
+    }
+    if (falhas) mostrarToast(`Registro criado, mas ${falhas} anexo(s) não subiram. Anexe de novo pelo painel de detalhes.`);
+    P.pend = [];
     P.sel[aba] = null;
     $('pb-modal').close(); // o cadastro fecha ao concluir
     renderAbas();
@@ -531,6 +546,8 @@ async function adicionar() {
     mostrarToast(corpo.status === 'REALIZADA' ? `Pedido ${sel.numero} cadastrado como realizada: oculto da lista.` : `Pedido ${sel.numero} cadastrado em ${t.aba}.`);
   } catch (e) {
     erro(e.message);
+  } finally {
+    if ($('pb-add')) $('pb-add').disabled = false;
   }
 }
 
@@ -645,6 +662,8 @@ raiz.addEventListener('click', (e) => {
   if (ac) return void abrirAcoes(ac.dataset.acoes);
   const prox = e.target.closest('#ac-proxima');
   if (prox) { AC.revelar = Math.max(AC.revelar, ORDEM_ETAPAS.indexOf(prox.dataset.proxima)); aplicarVisibilidade(); return void document.querySelector(`#pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] textarea, #pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] input`)?.focus(); }
+  const tirar = e.target.closest('[data-tirar-pendente]');
+  if (tirar) { P.pend.splice(Number(tirar.dataset.tirarPendente), 1); return renderPendentes(); }
   const verAnexo = e.target.closest('[data-ver-anexo]');
   if (verAnexo) return void abrirAnexo(verAnexo.dataset.verAnexo);
   const delAnexo = e.target.closest('[data-del-anexo]');
@@ -690,6 +709,7 @@ raiz.addEventListener('keydown', (e) => {
 
 raiz.addEventListener('change', (e) => {
   if (e.target.matches('#pb-acoes-modal [data-ac]')) return void campoAcoes(e.target, true);
+  if (e.target.matches('[data-anexo-novo]')) { const f = [...e.target.files]; e.target.value = ''; return void juntarPendentes(f); }
   if (e.target.matches('[data-anexo-defeito]')) { const f = [...e.target.files]; const id = e.target.dataset.anexoDefeito; e.target.value = ''; return void anexarDefeito(id, f); }
   if (e.target.matches('#pb-acoes-modal [data-arquivo]')) { const f = [...e.target.files]; e.target.value = ''; return void anexarArquivos(e.target.dataset.arquivo, f); }
   if (e.target.id === 'pb-fde') { P.f[P.aba].de = e.target.value; return renderLista(); }
@@ -1056,18 +1076,36 @@ const lerBase64 = (blob) => new Promise((ok, falha) => {
   fr.readAsDataURL(blob);
 });
 
+/** Converte o arquivo para o formato de envio: PDF direto; imagem reduzida se for grande. */
+async function prepararAnexo(arq) {
+  if (arq.type === 'application/pdf') {
+    if (arq.size > 5 * 1024 * 1024) throw new Error(`"${arq.name}" passa de 5 MB.`);
+    return { nome: arq.name, tipo: arq.type, dados: await lerBase64(arq) };
+  }
+  const img = await prepararImagem(arq);
+  return { nome: img.nome, tipo: img.tipo, dados: img.dados };
+}
+
+function renderPendentes() {
+  const ul = $('pb-pend');
+  if (!ul) return;
+  ul.innerHTML = P.pend.map((a, i) => `<li><span class="pb-anexo-ver"><b>${a.tipo === 'application/pdf' ? 'PDF' : 'IMG'}</b><span>${esc(a.nome)}</span></span>
+    <button type="button" class="pb-anexo-x" data-tirar-pendente="${i}" aria-label="Tirar ${esc(a.nome)}">×</button></li>`).join('');
+}
+
+async function juntarPendentes(arquivos) {
+  for (const arq of arquivos) {
+    if (P.pend.length >= 15) { mostrarToast('No máximo 15 anexos por registro.'); break; }
+    try { P.pend.push(await prepararAnexo(arq)); } catch (e) { mostrarToast(e.message); }
+  }
+  renderPendentes();
+}
+
 async function anexarDefeito(id, arquivos) {
   const alvo = $('pb-anexos');
   for (const arq of arquivos) {
     try {
-      let corpo;
-      if (arq.type === 'application/pdf') {
-        if (arq.size > 5 * 1024 * 1024) throw new Error(`"${arq.name}" passa de 5 MB.`);
-        corpo = { nome: arq.name, tipo: arq.type, dados: await lerBase64(arq) };
-      } else {
-        const img = await prepararImagem(arq); // reduz foto grande antes de enviar
-        corpo = { nome: img.nome, tipo: img.tipo, dados: img.dados };
-      }
+      const corpo = await prepararAnexo(arq);
       if (alvo) alvo.insertAdjacentHTML('beforeend', '<li class="pb-anexo-envio">Enviando…</li>');
       await window.PCP.programacao?.garantirUsuario?.();
       aplicar(await api(`/api/problematicos/defeitos/${id}/anexos`, { method: 'POST', body: JSON.stringify(corpo) }));
@@ -1111,4 +1149,13 @@ $('pb-grid').addEventListener('paste', (e) => {
   if (!imagens.length) return;
   e.preventDefault();
   void anexarDefeito(P.selecionado.defeitos, imagens);
+});
+
+// Ctrl+V dentro do cadastro de um defeito: a imagem vira anexo pendente.
+$('pb-modal').addEventListener('paste', (e) => {
+  if (P.aba !== 'defeitos') return;
+  const imagens = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+  if (!imagens.length) return;
+  e.preventDefault();
+  void juntarPendentes(imagens);
 });
