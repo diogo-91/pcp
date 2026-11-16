@@ -430,3 +430,11 @@ test("anexos de defeitos: imagem e PDF, abre de volta, recusa o resto, some com 
   await app.inject({ method: "DELETE", url: `/api/problematicos/defeitos/${def}` });
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM pcp_defeito_anexo").get() as { n: number }).n, 0);
 });
+
+test("registro antigo sem telefone mostra o telefone do cadastro do cliente no PCP", async () => {
+  const { app, db } = await montar();
+  const id = ((await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "x" } })).json() as { id: number }).id;
+  db.prepare("UPDATE pcp_defeito SET telefone = '' WHERE id = ?").run(id); // como era antes do campo existir
+  const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { defeitos: Array<{ telefone: string }> };
+  assert.equal(lista.defeitos[0].telefone, "2");
+});

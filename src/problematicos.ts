@@ -310,6 +310,15 @@ export class ProblematicosService {
     const lista = (tipo: TipoProblematico) =>
       (this.db.prepare(`SELECT * FROM ${TABELAS[tipo].tabela} ORDER BY id DESC`).all() as Linha[]).map((l) => this.paraSaida(tipo, l));
     const dados = { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
+    // Registros cadastrados antes do campo Telefone existir (ou sem telefone digitado): mostra o do cadastro do cliente no PCP.
+    const semTelefone = [...dados.urgentes, ...dados.devolucoes, ...dados.defeitos].filter((d) => !d.telefone);
+    if (semTelefone.length) {
+      const numeros = [...new Set(semTelefone.map((d) => d.numeroPedido as number))];
+      const doPedido = new Map<number, string>();
+      const linhas = this.db.prepare(`SELECT numero, telefone FROM pedidos WHERE numero IN (${numeros.map(() => "?").join(",")}) AND telefone <> '' ORDER BY nomus_id`).all(...(numeros as never[])) as Linha[];
+      for (const l of linhas) doPedido.set(l.numero as number, limpar(l.telefone));
+      for (const d of semTelefone) d.telefone = doPedido.get(d.numeroPedido as number) ?? "";
+    }
     // Cada devolução mostra no botão "Ações" quantas das 5 etapas já têm algo preenchido.
     const etapas = this.acoes.etapasPorDevolucao();
     const anexos = this.anexos.porDefeito();
