@@ -534,3 +534,16 @@
 .pb-linha small{display:block;margin-top:1px;font-size:11.5px;line-height:1.35;color:#7a8897;overflow-wrap:anywhere}
 .pb-linha time{font-size:10.5px;color:#8a9aab;text-align:right;white-space:nowrap;max-width:92px;white-space:normal}
 .pb-st-PERDIDO{background:#e9edf2;color:#5a6c7e}
+
+.pb-clip{display:inline-flex;align-items:center;gap:2px;margin-left:6px;font-size:10px;font-weight:800;color:#8a5a00;vertical-align:middle}
+.pb-clip svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pb-anexos{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.pb-anexos li{display:flex;align-items:center;gap:6px}
+.pb-anexo-ver{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:6px 9px;border:1px solid #ece9cf;border-radius:10px;background:#fffdf0;text-align:left;font-size:11.5px;color:#26394e;cursor:pointer}
+.pb-anexo-ver:hover{background:#fff6bf;border-color:#fbc41a}
+.pb-anexo-ver b{flex:none;padding:1px 6px;border-radius:6px;background:#ffd633;color:#2b1d00;font-size:9.5px}
+.pb-anexo-ver span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-anexo-ver small{flex:none;color:#8a9aab;font-size:10.5px}
+.pb-anexo-x{flex:none;width:22px;height:22px;border:0;border-radius:50%;background:#eef1f5;color:#5a6c7e;font-size:15px;line-height:1;padding:0;cursor:pointer}
+.pb-anexo-x:hover{background:#f6d4d8;color:#b23a47}
+.pb-anexo-envio{font-size:11.5px;font-weight:750;color:#8a5a00}

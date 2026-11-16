@@ -385,3 +385,48 @@ test("status Perdido: só vale para devoluções e não conta como pendente", as
   const recusa = await app.inject({ method: "PATCH", url: `/api/problematicos/urgentes/${urg.id}`, payload: { status: "PERDIDO" } });
   assert.equal(recusa.statusCode, 400);
 });
+
+test("telefone do cliente entra sozinho nos três tipos de registro (do pedido) e pode ser corrigido", async () => {
+  const { app } = await montar();
+  const criar = async (tipo: string, extra: object) =>
+    ((await app.inject({ method: "POST", url: `/api/problematicos/${tipo}`, payload: { numeroPedido: 1750, ...extra } })).json() as Record<string, Array<{ id: number; telefone: string }>>)[tipo][0];
+  assert.equal((await criar("urgentes", { dataEntregaCombinada: "2026-12-01" })).telefone, "2"); // telefone do pedido 1750 no PCP
+  assert.equal((await criar("defeitos", { causa: "risco" })).telefone, "2");
+  const dev = await criar("devolucoes", { formaPagamento: "Pix", valor: 1 });
+  assert.equal(dev.telefone, "2");
+
+  const novo = (await app.inject({ method: "PATCH", url: `/api/problematicos/devolucoes/${dev.id}`, payload: { telefone: "(11) 99999-0000" } })).json() as { devolucoes: Array<{ telefone: string }> };
+  assert.equal(novo.devolucoes[0].telefone, "(11) 99999-0000");
+  // Telefone digitado no cadastro vale mais que o do pedido.
+  const digitado = (await app.inject({ method: "POST", url: "/api/problematicos/urgentes", payload: { numeroPedido: 1750, dataEntregaCombinada: "2026-12-02", telefone: "1234" } })).json() as { urgentes: Array<{ telefone: string }> };
+  assert.equal(digitado.urgentes[0].telefone, "1234");
+});
+
+test("anexos de defeitos: imagem e PDF, abre de volta, recusa o resto, some com o registro", async () => {
+  const { app, db } = await montar();
+  const def = ((await app.inject({ method: "POST", url: "/api/problematicos/defeitos", payload: { numeroPedido: 1750, causa: "risco na chapa" } })).json() as { id: number }).id;
+  const url = `/api/problematicos/defeitos/${def}/anexos`;
+  const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n").toString("base64");
+
+  const a = (await app.inject({ method: "POST", url, payload: { nome: "foto.png", tipo: "image/png", dados: PNG } })).json() as { defeitos: Array<{ anexos: Array<{ id: number; nome: string; tipo: string }> }> };
+  await app.inject({ method: "POST", url, payload: { nome: "laudo.pdf", tipo: "application/pdf", dados: PDF } });
+  const lista = ((await app.inject({ method: "GET", url: "/api/problematicos" })).json() as typeof a).defeitos[0].anexos;
+  assert.deepEqual(lista.map((x) => x.nome), ["foto.png", "laudo.pdf"]);
+
+  const arq = await app.inject({ method: "GET", url: `/api/problematicos/anexos/${lista[1].id}` });
+  assert.equal(arq.headers["content-type"], "application/pdf");
+  assert.equal(arq.headers["x-content-type-options"], "nosniff");
+  assert.ok(a.defeitos[0].anexos.length >= 1);
+
+  const ruim = (payload: object) => app.inject({ method: "POST", url, payload });
+  assert.equal((await ruim({ nome: "x.html", tipo: "text/html", dados: Buffer.from("<script>").toString("base64") })).statusCode, 400);
+  assert.equal((await ruim({ nome: "x.pdf", tipo: "application/pdf", dados: PNG })).statusCode, 400, "conteúdo não confere com o tipo");
+  assert.equal((await ruim({ nome: "grande.png", tipo: "image/png", dados: Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(5 * 1024 * 1024)]).toString("base64") })).statusCode, 400, "passa de 5 MB");
+  assert.equal((await app.inject({ method: "POST", url: "/api/problematicos/defeitos/9999/anexos", payload: { nome: "a.png", tipo: "image/png", dados: PNG } })).statusCode, 404);
+
+  const sem = (await app.inject({ method: "DELETE", url: `/api/problematicos/anexos/${lista[0].id}` })).json() as typeof a;
+  assert.equal(sem.defeitos[0].anexos.length, 1);
+
+  await app.inject({ method: "DELETE", url: `/api/problematicos/defeitos/${def}` });
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM pcp_defeito_anexo").get() as { n: number }).n, 0);
+});

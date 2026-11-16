@@ -371,6 +371,22 @@ const MIGRATIONS: string[] = [
   ALTER TABLE pcp_devolucao_acao ADD COLUMN decisao_em TEXT;
   ALTER TABLE pcp_devolucao_acao ADD COLUMN fin_em TEXT;
   `,
+  // Telefone do cliente em cada registro (vem do pedido/Nomus ao cadastrar; dá para corrigir) e anexos dos defeitos.
+  `
+  ALTER TABLE pcp_urgente ADD COLUMN telefone TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pcp_devolucao ADD COLUMN telefone TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pcp_defeito ADD COLUMN telefone TEXT NOT NULL DEFAULT '';
+  CREATE TABLE IF NOT EXISTS pcp_defeito_anexo (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    defeito_id  INTEGER NOT NULL,
+    nome        TEXT NOT NULL,
+    mime        TEXT NOT NULL,
+    dados       BLOB NOT NULL,
+    created_at  TEXT NOT NULL,
+    created_by  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_pcp_defeito_anexo ON pcp_defeito_anexo (defeito_id);
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

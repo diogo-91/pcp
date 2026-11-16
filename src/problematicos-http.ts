@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ErroProblematicos, TIPOS_PROBLEMATICOS, type ProblematicosService, type TipoProblematico } from "./problematicos";
 
 const CAMPOS: Record<TipoProblematico, string[]> = {
-  urgentes: ["numeroPedido", "cliente", "dataEntregaCombinada", "status"],
-  devolucoes: ["numeroPedido", "cliente", "formaPagamento", "valor", "status"],
-  defeitos: ["numeroPedido", "cliente", "causa", "motorista", "acao", "prazoAcao", "status"],
+  urgentes: ["numeroPedido", "cliente", "telefone", "dataEntregaCombinada", "status"],
+  devolucoes: ["numeroPedido", "cliente", "telefone", "formaPagamento", "valor", "status"],
+  defeitos: ["numeroPedido", "cliente", "telefone", "causa", "motorista", "acao", "prazoAcao", "status"],
 };
 
 /** Copia só os campos permitidos do corpo (vem do navegador). */
@@ -102,6 +102,35 @@ export function registrarProblematicos(app: FastifyInstance, servico: Problemati
 
   app.delete("/api/problematicos/prints/:id", async (request, reply) =>
     tratar(reply, () => acoes.removerPrint(idDe((request.params as { id: string }).id)))
+  );
+
+  // ---- Clientes / Defeitos > anexos (imagem ou PDF)
+  const anexos = servico.anexos;
+  app.post("/api/problematicos/defeitos/:id/anexos", { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) =>
+    tratar(reply, () => {
+      const c = escolher(request.body, ["nome", "tipo", "dados"]);
+      anexos.adicionar(idDe((request.params as { id: string }).id), c.nome, c.tipo, c.dados, usuarioDe(request));
+      return servico.listar();
+    })
+  );
+
+  app.get("/api/problematicos/anexos/:id", async (request, reply) =>
+    tratar(reply, () => {
+      const a = anexos.ler(idDe((request.params as { id: string }).id));
+      return reply
+        .header("Content-Type", a.mime)
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Content-Security-Policy", "default-src 'none'; sandbox")
+        .header("Cache-Control", "private, max-age=3600")
+        .send(a.dados);
+    })
+  );
+
+  app.delete("/api/problematicos/anexos/:id", async (request, reply) =>
+    tratar(reply, () => {
+      anexos.remover(idDe((request.params as { id: string }).id));
+      return servico.listar();
+    })
   );
 
   app.post("/api/problematicos/:tipo", async (request, reply) =>

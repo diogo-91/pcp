@@ -53,7 +53,7 @@ const TABELAS = {
     cardTitulo: 'Cadastrar novo pedido urgente', cardSub: 'Inclua um pedido com prioridade de tratamento.',
     listaTitulo: 'Pedidos urgentes', listaSub: 'Fila de pedidos com prioridade de tratamento.',
     vazio: 'Nenhum pedido urgente cadastrado.', vazioSub: 'Não há pedidos urgentes para exibir no momento.',
-    campos: [{ k: 'dataEntregaCombinada', rotulo: 'Data de entrega combinada', tipo: 'date', obrigatorio: true }, STATUS],
+    campos: [{ k: 'telefone', rotulo: 'Telefone', tipo: 'text', max: 40 }, { k: 'dataEntregaCombinada', rotulo: 'Data de entrega combinada', tipo: 'date', obrigatorio: true }, STATUS],
     data: { campo: 'dataEntregaCombinada', rotulo: 'Data de entrega', tipo: 'futura' },
   },
   devolucoes: {
@@ -62,6 +62,7 @@ const TABELAS = {
     listaTitulo: 'Pedidos de devolução', listaSub: 'Pedidos devolvidos e o valor a devolver.',
     vazio: 'Nenhuma devolução cadastrada.', vazioSub: 'Não há devoluções para exibir no momento.',
     campos: [
+      { k: 'telefone', rotulo: 'Telefone', tipo: 'text', max: 40 },
       { k: 'formaPagamento', rotulo: 'Forma de pagamento', tipo: 'text', max: 300 },
       { k: 'valor', rotulo: 'Valor da devolução', tipo: 'number' },
       STATUS,
@@ -74,6 +75,7 @@ const TABELAS = {
     listaTitulo: 'Clientes / defeitos', listaSub: 'Defeitos reclamados e o que será feito.',
     vazio: 'Nenhum registro de defeito cadastrado.', vazioSub: 'Não há defeitos para exibir no momento.',
     campos: [
+      { k: 'telefone', rotulo: 'Telefone', tipo: 'text', max: 40 },
       { k: 'causa', rotulo: 'Causa', tipo: 'text', max: 500, obrigatorio: true },
       { k: 'motorista', rotulo: 'Motorista', tipo: 'text', max: 100 },
       { k: 'acao', rotulo: 'Ação', tipo: 'text', max: 500 },
@@ -95,7 +97,7 @@ TABELAS.convertidos = {
 const filtroInicial = () => ({ q: '', de: '', ate: '', status: 'pendentes', ordem: 'recentes' });
 
 const P = {
-  auto: { forma: '', valor: '' }, // o que o formulário de devolução preencheu sozinho (para trocar ao escolher outro pedido)
+  auto: { forma: '', valor: '', telefone: '' }, // o que o formulário de devolução preencheu sozinho (para trocar ao escolher outro pedido)
   aba: 'urgentes',
   dados: { urgentes: [], devolucoes: [], defeitos: [], convertidos: [] },
   resumo: null,
@@ -181,7 +183,7 @@ function montarAba() {
 function abrirModal() {
   const t = TABELAS[P.aba];
   P.sel[P.aba] = null;
-  P.auto = { forma: '', valor: '' };
+  P.auto = { forma: '', valor: '', telefone: '' };
 
   const campoForm = (c) =>
     c.tipo === 'status'
@@ -261,7 +263,7 @@ function registrosFiltrados() {
     if (f.status === 'realizadas' && st !== 'REALIZADA') return false;
     if (f.status === 'perdidas' && st !== 'PERDIDO') return false;
     if (f.status === 'todas' && st === 'PERDIDO') return false; // perdido só aparece quando pedido de propósito
-    if (q && ![r.numeroPedido, r.cliente, r.causa, r.motorista, r.acao, r.formaPagamento].join(' ').toLowerCase().includes(q)) return false;
+    if (q && ![r.numeroPedido, r.cliente, r.telefone, r.causa, r.motorista, r.acao, r.formaPagamento].join(' ').toLowerCase().includes(q)) return false;
     if (f.de || f.ate) {
       const d = t.data.tipo === 'cadastro' ? diaSP(r[t.data.campo]) : r[t.data.campo];
       if (!d || (f.de && d < f.de) || (f.ate && d > f.ate)) return false;
@@ -354,8 +356,8 @@ function renderLista() {
     .map(
       (r) => `<tr data-id="${r.id}" data-sel="${r.id}" class="${r.id === P.selecionado[P.aba] ? 'sel' : ''}" tabindex="0">
         <td class="pb-ic ${t.cor}">${ICONE[t.icone]}</td>
-        <td><b>${r.numeroPedido}</b></td>
-        <td class="pb-col-cliente">${esc(r.cliente || '—')}</td>
+        <td><b>${r.numeroPedido}</b>${(r.anexos || []).length ? `<span class="pb-clip" title="${r.anexos.length} anexo(s)">${ICONE.clipe}${r.anexos.length}</span>` : ''}</td>
+        <td class="pb-col-cliente">${esc(r.cliente || '—')}${r.telefone ? `<span class="pb-sub">${esc(r.telefone)}</span>` : ''}</td>
         ${cols.map((c) => `<td>${celulaFila(c, r)}</td>`).join('')}
         <td>${statusSelect('data-campo="status"', r.status || 'NAO_REALIZADA', `aria-label="Status do pedido ${r.numeroPedido}"`)}</td></tr>`
     )
@@ -378,6 +380,18 @@ function campoDetalhe(c, r) {
   return `<label class="pb-det-campo">${esc(c.rotulo)}${corpo}</label>`;
 }
 
+const tamanhoLegivel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** Anexos de um registro de Clientes / Defeitos (imagem ou PDF). */
+function anexosHtml(r) {
+  const lista = r.anexos || [];
+  return `<div class="pb-det-sec"><h5>${ICONE.clipe} Anexos <i class="pb-h5-n">${lista.length}</i></h5>
+    <div class="ac-anexo"><label class="ac-anexar">${ICONE.clipe} Anexar arquivo<input type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" data-anexo-defeito="${r.id}"></label>
+      <span class="ac-dica">imagem ou PDF (até 5 MB) · ou cole com Ctrl+V</span></div>
+    <ul class="pb-anexos" id="pb-anexos">${lista.map((a) => `<li><button type="button" class="pb-anexo-ver" data-ver-anexo="${a.id}" title="Abrir ${esc(a.nome)}"><b>${a.tipo === 'application/pdf' ? 'PDF' : 'IMG'}</b><span>${esc(a.nome)}</span><small>${tamanhoLegivel(a.tamanho)}</small></button>
+      <button type="button" class="pb-anexo-x" data-del-anexo="${a.id}" aria-label="Remover ${esc(a.nome)}">×</button></li>`).join('')}</ul></div>`;
+}
+
 function renderDetalhe() {
   const alvo = $('pb-detalhe');
   if (!alvo) return;
@@ -396,6 +410,7 @@ function renderDetalhe() {
         <div><span>Categoria</span><b class="pb-chip-cat">${esc(t.aba.replace('Pedidos ', ''))}</b></div>
       </div>
       <div class="pb-det-campos">${t.campos.map((c) => campoDetalhe(c, r)).join('')}</div>
+      ${P.aba === 'defeitos' ? anexosHtml(r) : ''}
       ${ehDevolucao() ? `<div class="pb-det-sec"><h5>${ICONE.relogio} Etapas do atendimento <i class="pb-h5-n">${r.etapasFeitas || 0}/5</i></h5>${linhaDoTempo(r)}</div>` : ''}
       <div class="pb-det-sec"><h5>${ICONE.relogio} Histórico</h5>
         <ul class="pb-hist"><li><i class="on"></i><div><b>Cadastrado</b><small>${esc(quando(r.criadoEm))}</small></div></li>
@@ -464,13 +479,18 @@ async function escolher(numero, cliente) {
     if (!P.sel[aba] || P.sel[aba].numero !== numero) return;
     P.sel[aba] = { numero, cliente: d.cliente || cliente, prazoEntrega: d.prazoEntrega, carregando: false, aviso: d.aviso || '', valor: d.valor, valorTotal: d.valorTotal };
     // Devolução: forma de pagamento e valor saem do pedido de venda (só em campo vazio: o que foi digitado vale mais).
+    // Telefone do cliente (cadastro do PCP/Nomus), em todas as abas; não sobrescreve o que foi digitado.
+    const tel = $('pb-f-telefone');
+    if (tel && (!tel.value || tel.value === P.auto.telefone)) tel.value = d.telefone || '';
+    P.auto.telefone = tel ? tel.value : '';
     if (aba === 'devolucoes') {
       // Só não sobrescreve o que a pessoa digitou: o que veio do pedido anterior (preenchido sozinho) é trocado pelo do novo pedido.
       const forma = $('pb-f-formaPagamento');
       const valor = $('pb-f-valor');
       if (forma && (!forma.value || forma.value === P.auto.forma)) forma.value = d.formaPagamento || '';
       if (valor && (!valor.value || valor.value === P.auto.valor)) valor.value = d.valor ?? '';
-      P.auto = { forma: forma ? forma.value : '', valor: valor ? valor.value : '' };
+      P.auto.forma = forma ? forma.value : '';
+      P.auto.valor = valor ? valor.value : '';
       P.sel[aba].preenchido = !!(d.formaPagamento || d.valor !== null);
     }
     if (P.aba === aba) {
@@ -625,6 +645,10 @@ raiz.addEventListener('click', (e) => {
   if (ac) return void abrirAcoes(ac.dataset.acoes);
   const prox = e.target.closest('#ac-proxima');
   if (prox) { AC.revelar = Math.max(AC.revelar, ORDEM_ETAPAS.indexOf(prox.dataset.proxima)); aplicarVisibilidade(); return void document.querySelector(`#pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] textarea, #pb-acoes-modal [data-etapa="${prox.dataset.proxima}"] input`)?.focus(); }
+  const verAnexo = e.target.closest('[data-ver-anexo]');
+  if (verAnexo) return void abrirAnexo(verAnexo.dataset.verAnexo);
+  const delAnexo = e.target.closest('[data-del-anexo]');
+  if (delAnexo) return void removerAnexo(delAnexo.dataset.delAnexo);
   const delPrint = e.target.closest('[data-del-print]');
   if (delPrint) return void removerPrint(delPrint.dataset.delPrint);
   const verPrint = e.target.closest('[data-ver-print]');
@@ -666,6 +690,7 @@ raiz.addEventListener('keydown', (e) => {
 
 raiz.addEventListener('change', (e) => {
   if (e.target.matches('#pb-acoes-modal [data-ac]')) return void campoAcoes(e.target, true);
+  if (e.target.matches('[data-anexo-defeito]')) { const f = [...e.target.files]; const id = e.target.dataset.anexoDefeito; e.target.value = ''; return void anexarDefeito(id, f); }
   if (e.target.matches('#pb-acoes-modal [data-arquivo]')) { const f = [...e.target.files]; e.target.value = ''; return void anexarArquivos(e.target.dataset.arquivo, f); }
   if (e.target.id === 'pb-fde') { P.f[P.aba].de = e.target.value; return renderLista(); }
   if (e.target.id === 'pb-fate') { P.f[P.aba].ate = e.target.value; return renderLista(); }
@@ -1021,3 +1046,69 @@ function renderEscolha(q) {
 }
 
 $('pb-escolha-modal').addEventListener('input', (e) => { if (e.target.id === 'pb-escolha-q') renderEscolha(e.target.value); });
+
+// ---------------------------------------------------------------- Clientes / Defeitos > anexos
+
+const lerBase64 = (blob) => new Promise((ok, falha) => {
+  const fr = new FileReader();
+  fr.onload = () => ok(String(fr.result).split(',')[1] || '');
+  fr.onerror = () => falha(new Error('Não foi possível ler o arquivo.'));
+  fr.readAsDataURL(blob);
+});
+
+async function anexarDefeito(id, arquivos) {
+  const alvo = $('pb-anexos');
+  for (const arq of arquivos) {
+    try {
+      let corpo;
+      if (arq.type === 'application/pdf') {
+        if (arq.size > 5 * 1024 * 1024) throw new Error(`"${arq.name}" passa de 5 MB.`);
+        corpo = { nome: arq.name, tipo: arq.type, dados: await lerBase64(arq) };
+      } else {
+        const img = await prepararImagem(arq); // reduz foto grande antes de enviar
+        corpo = { nome: img.nome, tipo: img.tipo, dados: img.dados };
+      }
+      if (alvo) alvo.insertAdjacentHTML('beforeend', '<li class="pb-anexo-envio">Enviando…</li>');
+      await window.PCP.programacao?.garantirUsuario?.();
+      aplicar(await api(`/api/problematicos/defeitos/${id}/anexos`, { method: 'POST', body: JSON.stringify(corpo) }));
+    } catch (e) {
+      mostrarToast(e.message);
+    }
+    renderLista();
+    renderDetalhe();
+  }
+}
+
+async function abrirAnexo(id) {
+  const janela = window.open('', '_blank'); // abre já, no clique, para o navegador não bloquear
+  try {
+    const blob = await window.PCP.apiBlob(`/api/problematicos/anexos/${id}`);
+    const url = URL.createObjectURL(blob);
+    if (janela) janela.location.href = url;
+    else window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    janela?.close();
+    mostrarToast(`Não foi possível abrir o anexo: ${e.message}`);
+  }
+}
+
+async function removerAnexo(id) {
+  if (!confirm('Remover este anexo?')) return;
+  try {
+    aplicar(await api(`/api/problematicos/anexos/${id}`, { method: 'DELETE' }));
+    renderLista();
+    renderDetalhe();
+  } catch (e) {
+    mostrarToast(e.message);
+  }
+}
+
+// Ctrl+V com uma imagem copiada, dentro do painel de um defeito, vira anexo.
+$('pb-grid').addEventListener('paste', (e) => {
+  if (P.aba !== 'defeitos' || !e.target.closest?.('#pb-detalhe') || !P.selecionado.defeitos) return;
+  const imagens = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+  if (!imagens.length) return;
+  e.preventDefault();
+  void anexarDefeito(P.selecionado.defeitos, imagens);
+});

@@ -4,6 +4,7 @@ import { diasEntre, hojeEmSaoPaulo, isDataPlausivel } from "./prazo";
 import { reaisParaCentavos } from "./programacao/regras";
 import type { NomusLeitor } from "./sync";
 import { AcoesDevolucaoService, resumirEtapas } from "./problematicos-acoes";
+import { AnexosDefeitoService } from "./problematicos-anexos";
 
 type Linha = Record<string, unknown>;
 
@@ -32,6 +33,7 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
   urgentes: {
     tabela: "pcp_urgente",
     campos: [
+      { chave: "telefone", coluna: "telefone", tipo: "texto", max: 40 },
       { chave: "dataEntregaCombinada", coluna: "data_entrega_combinada", tipo: "data", obrigatorio: true },
       { chave: "status", coluna: "status", tipo: "status" },
     ],
@@ -39,6 +41,7 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
   devolucoes: {
     tabela: "pcp_devolucao",
     campos: [
+      { chave: "telefone", coluna: "telefone", tipo: "texto", max: 40 },
       { chave: "formaPagamento", coluna: "forma_pagamento", tipo: "texto", max: 300 },
       { chave: "valor", coluna: "valor_centavos", tipo: "dinheiro" },
       { chave: "status", coluna: "status", tipo: "status" },
@@ -47,6 +50,7 @@ const TABELAS: Record<TipoProblematico, { tabela: string; campos: CampoDef[] }> 
   defeitos: {
     tabela: "pcp_defeito",
     campos: [
+      { chave: "telefone", coluna: "telefone", tipo: "texto", max: 40 },
       { chave: "causa", coluna: "causa", tipo: "texto", max: 500, obrigatorio: true },
       { chave: "motorista", coluna: "motorista", tipo: "texto", max: 100 },
       { chave: "acao", coluna: "acao", tipo: "texto", max: 500 },
@@ -77,6 +81,8 @@ export interface DetalheDoPedido extends PedidoEncontrado {
   /** Forma(s) de pagamento do pedido de venda, ex.: "Pix" ou "Pix + Cartão de Crédito". */
   formaPagamento: string;
   prazoEntrega: string | null;
+  /** Telefone do cadastro do cliente (PCP ou Nomus). */
+  telefone: string;
 }
 
 interface NomusPedido {
@@ -132,6 +138,7 @@ function dataBr(texto: string | undefined): string | null {
 export class ProblematicosService {
   private formasCache: { em: number; nomes: Map<number, string> } | null = null;
   readonly acoes: AcoesDevolucaoService;
+  readonly anexos: AnexosDefeitoService;
 
   constructor(
     private readonly db: DatabaseSync,
@@ -141,6 +148,7 @@ export class ProblematicosService {
     private readonly tempoLimiteMs = 25_000
   ) {
     this.acoes = new AcoesDevolucaoService(db, agora);
+    this.anexos = new AnexosDefeitoService(db, agora);
   }
 
   // ------------------------------------------------------------ busca e preenchimento automático
@@ -167,6 +175,15 @@ export class ProblematicosService {
     return achados;
   }
 
+  /** Telefone do cliente do pedido: o que o PCP já tem; se o pedido é só da Nomus, consulta lá (sem travar o cadastro). */
+  private async telefoneDe(numero: number): Promise<string> {
+    const local = this.db.prepare("SELECT telefone FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
+    const t = limpar(local?.telefone);
+    if (t || !this.nomus) return t;
+    const d = await this.comTempo(this.buscarNaNomus(numero)).catch(() => null);
+    return d?.telefone ?? "";
+  }
+
   private async nomesDasFormas(): Promise<Map<number, string>> {
     const agora = this.agora().getTime();
     if (this.formasCache && agora - this.formasCache.em < 24 * 3600_000) return this.formasCache.nomes;
@@ -184,9 +201,11 @@ export class ProblematicosService {
     if (!p || typeof p.id !== "number") return null;
 
     let cliente = "";
+    let telefone = "";
     if (typeof p.idPessoaCliente === "number") {
-      const pessoa = await this.nomus.get<{ nome?: string }>(`/pessoas/${p.idPessoaCliente}`).catch(() => null);
+      const pessoa = await this.nomus.get<{ nome?: string; telefone?: string }>(`/pessoas/${p.idPessoaCliente}`).catch(() => null);
       cliente = limpar(pessoa?.nome);
+      telefone = limpar(pessoa?.telefone);
     }
     const nomes = await this.nomesDasFormas().catch(() => new Map<number, string>());
     const formaPagamento = descreverPagamento(p, nomes);
@@ -198,6 +217,7 @@ export class ProblematicosService {
       nomusId: p.id,
       cliente,
       origem: "nomus",
+      telefone,
       valor: ((): number | null => { const v = valorPagoAgora(p, centavos); return v === null ? null : v / 100; })(),
       valorTotal: centavos === null ? null : centavos / 100,
       formaPagamento,
@@ -208,7 +228,7 @@ export class ProblematicosService {
   /** Dados do pedido para preencher o formulário: valor e forma de pagamento vêm do pedido de venda da Nomus. */
   async detalhe(numero: number): Promise<DetalheDoPedido> {
     if (!Number.isInteger(numero) || numero <= 0) throw new ErroProblematicos("Número de pedido inválido.");
-    const local = this.db.prepare("SELECT nomus_id, cliente_nome FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
+    const local = this.db.prepare("SELECT nomus_id, cliente_nome, telefone FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
 
     // A consulta continua em segundo plano mesmo se estourar o tempo: o resultado vai para a cópia local e a próxima vez é instantânea.
     const consulta = this.buscarNaNomus(numero);
@@ -221,7 +241,7 @@ export class ProblematicosService {
     } catch (e) {
       erro = e instanceof Error ? e.message : String(e);
     }
-    if (nomus) return { ...nomus, cliente: nomus.cliente || (local?.cliente_nome as string) || "", origem: local ? "pcp" : "nomus" };
+    if (nomus) return { ...nomus, cliente: nomus.cliente || (local?.cliente_nome as string) || "", telefone: nomus.telefone || limpar(local?.telefone), origem: local ? "pcp" : "nomus" };
     if (!erro && !local) throw new ErroProblematicos(`Pedido ${numero} não encontrado.`, 404);
 
     // A Nomus não respondeu a tempo (ou não achou): usa a última cópia, ou o que o PCP já tem do pedido.
@@ -237,6 +257,7 @@ export class ProblematicosService {
       nomusId: (local?.nomus_id as number | undefined) ?? null,
       cliente,
       origem: "pcp",
+      telefone: limpar(local?.telefone),
       valor: valorCentavos === null ? null : valorCentavos / 100,
       valorTotal: prog?.valor_centavos == null ? null : (prog.valor_centavos as number) / 100,
       formaPagamento: forma,
@@ -291,6 +312,8 @@ export class ProblematicosService {
     const dados = { urgentes: lista("urgentes"), devolucoes: lista("devolucoes"), defeitos: lista("defeitos") };
     // Cada devolução mostra no botão "Ações" quantas das 5 etapas já têm algo preenchido.
     const etapas = this.acoes.etapasPorDevolucao();
+    const anexos = this.anexos.porDefeito();
+    for (const d of dados.defeitos) d.anexos = anexos.get(d.id as number) ?? [];
     for (const d of dados.devolucoes) {
       const e = etapas.get(d.id as number) ?? resumirEtapas(this.acoes.vazio());
       d.etapas = e;
@@ -352,9 +375,11 @@ export class ProblematicosService {
       if (d) {
         if (!("formaPagamento" in entrada)) entrada.formaPagamento = d.formaPagamento;
         if (!("valor" in entrada)) entrada.valor = d.valor;
+        if (!("telefone" in entrada)) entrada.telefone = d.telefone;
         cliente = cliente || d.cliente;
       }
     }
+    if (!("telefone" in entrada)) entrada.telefone = await this.telefoneDe(numero);
     if (!cliente) {
       const local = this.db.prepare("SELECT cliente_nome FROM pedidos WHERE numero = ? ORDER BY nomus_id DESC LIMIT 1").get(numero) as Linha | undefined;
       cliente = (local?.cliente_nome as string) ?? "";
@@ -390,6 +415,7 @@ export class ProblematicosService {
     const r = this.db.prepare(`DELETE FROM ${TABELAS[tipo].tabela} WHERE id = ?`).run(id);
     if (Number(r.changes) === 0) throw new ErroProblematicos("Registro não encontrado.", 404);
     if (tipo === "devolucoes") this.acoes.apagarDaDevolucao(id);
+    if (tipo === "defeitos") this.anexos.apagarDoDefeito(id);
   }
 }
 
@@ -422,4 +448,4 @@ export function resumir(registros: Array<Record<string, unknown>>, hoje: string)
 }
 
 const rotulo = (chave: string) =>
-  ({ acao: "a ação", prazoAcao: "o prazo da ação", status: "o status", dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista" })[chave] ?? chave;
+  ({ acao: "a ação", prazoAcao: "o prazo da ação", status: "o status", dataEntregaCombinada: "a data de entrega combinada", formaPagamento: "a forma de pagamento", valor: "o valor", causa: "a causa", motorista: "o motorista", telefone: "o telefone" })[chave] ?? chave;
