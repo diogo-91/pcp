@@ -455,10 +455,12 @@ test("automação (n8n): lista os cancelamentos ainda não avisados com a mensag
   const lista = (await app.inject({ method: "GET", url, headers: cab })).json() as { itens: Array<{ id: number; numeroPedido: number; mensagem: string; valorFormatado: string }> };
   assert.equal(lista.itens.length, 1);
   assert.equal(lista.itens[0].numeroPedido, 1750);
-  assert.match(lista.itens[0].mensagem, /cliente quer cancelar/);
-  assert.match(lista.itens[0].mensagem, /Pedido: 1750/);
-  assert.match(lista.itens[0].mensagem, /Valor da devolução: R\$ 1\.155,80/);
-  assert.match(lista.itens[0].mensagem, /Atendido por: Ana/);
+  assert.match(lista.itens[0].mensagem, /CANCELAMENTO DE PEDIDO/);
+  assert.match(lista.itens[0].mensagem, /quer cancelar mesmo/);
+  assert.match(lista.itens[0].mensagem, /\*Pedido:\* 1750/);
+  assert.match(lista.itens[0].mensagem, /\*Valor a devolver:\* R\$ 1\.155,80/);
+  assert.match(lista.itens[0].mensagem, /\*Atendido por:\* Ana/);
+  assert.match(lista.itens[0].mensagem, /\n\n/, "blocos separados por linha em branco");
   assert.match(lista.itens[0].mensagem, /\n/);
 
   // Confirmado: some da fila (e confirmar de novo não dá erro).

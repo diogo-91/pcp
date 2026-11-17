@@ -196,15 +196,23 @@ export class ProblematicosService {
       if (!d) continue;
       const a = this.acoes.obter(p.id);
       const valor = typeof d.valor === "number" ? brl(Math.round(d.valor * 100)) : "";
+      // Layout para o WhatsApp: *negrito*, _itálico_, blocos separados por linha em branco. Pagamento dividido vira uma linha por parcela.
+      const pagamento = String(d.formaPagamento ?? "").split(" + ").map((x) => x.trim()).filter(Boolean);
+      const conversa = limpar(a.sac.conversa);
+      const bloco = (...linhas: string[]) => linhas.filter(Boolean).join("\n");
       const linhas = [
-        "*Devolução: cliente quer cancelar o pedido*",
-        `Pedido: ${d.numeroPedido}`,
-        d.cliente ? `Cliente: ${d.cliente}` : "",
-        d.telefone ? `Telefone: ${d.telefone}` : "",
-        d.formaPagamento ? `Forma de pagamento: ${d.formaPagamento}` : "",
-        valor ? `Valor da devolução: ${valor}` : "",
-        a.sac.quem ? `Atendido por: ${a.sac.quem}` : "",
-        p.decisaoEm ? `Decisão registrada em: ${quando(p.decisaoEm)}` : "",
+        bloco("🚨 *CANCELAMENTO DE PEDIDO*", "_Cliente quer cancelar mesmo: devolução a realizar_"),
+        bloco(`📋 *Pedido:* ${d.numeroPedido}`, d.cliente ? `👤 *Cliente:* ${d.cliente}` : "", d.telefone ? `📞 *Telefone:* ${d.telefone}` : ""),
+        bloco(
+          pagamento.length > 1 ? `💳 *Pagamento:*\n${pagamento.map((x) => `   • ${x}`).join("\n")}` : pagamento.length === 1 ? `💳 *Pagamento:* ${pagamento[0]}` : "",
+          valor ? `💰 *Valor a devolver:* ${valor}` : ""
+        ),
+        bloco(
+          a.sac.quem ? `🙋 *Atendido por:* ${a.sac.quem}` : "",
+          conversa ? `📝 *Conversa do SAC:* ${conversa.length > 300 ? `${conversa.slice(0, 300)}…` : conversa}` : "",
+          p.decisaoEm ? `🕒 *Decisão em:* ${quando(p.decisaoEm).replace(", ", " às ")}` : ""
+        ),
+        "_Depois de devolver, registre no PCP (etapa Financeiro)._",
       ].filter(Boolean);
       itens.push({
         id: p.id,
@@ -216,7 +224,7 @@ export class ProblematicosService {
         valorFormatado: valor,
         atendidoPor: a.sac.quem,
         decisaoEm: p.decisaoEm,
-        mensagem: linhas.join("\n"),
+        mensagem: linhas.join("\n\n"),
       });
     }
     return itens;
