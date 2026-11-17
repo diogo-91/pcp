@@ -83,6 +83,25 @@ export function registrarProblematicos(app: FastifyInstance, servico: Problemati
     return { itens: servico.avisosDeCancelamento() };
   });
 
+  // Reservar ANTES de enviar: só uma execução do n8n consegue; as outras recebem 409 e pulam o item.
+  app.post("/api/problematicos/automacao/cancelamentos/:id/reservar", async (request, reply) => {
+    if (!automacaoOk(request, reply)) return reply;
+    return tratar(reply, () => {
+      const ok = servico.acoes.reservarAvisoCancelamento(idDe((request.params as { id: string }).id));
+      if (!ok) return reply.code(409).send({ erro: "Este aviso já foi enviado ou está sendo enviado por outra execução." });
+      return { ok: true };
+    });
+  });
+
+  // O envio falhou: devolve o aviso para a fila.
+  app.post("/api/problematicos/automacao/cancelamentos/:id/liberar", async (request, reply) => {
+    if (!automacaoOk(request, reply)) return reply;
+    return tratar(reply, () => {
+      servico.acoes.liberarAvisoCancelamento(idDe((request.params as { id: string }).id));
+      return { ok: true };
+    });
+  });
+
   app.post("/api/problematicos/automacao/cancelamentos/:id/avisado", async (request, reply) => {
     if (!automacaoOk(request, reply)) return reply;
     return tratar(reply, () => {

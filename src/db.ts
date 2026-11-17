@@ -391,6 +391,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE pcp_devolucao_acao ADD COLUMN cancelamento_avisado_em TEXT;
   `,
+  // Reserva do aviso enquanto o n8n envia (impede dois envios do mesmo pedido em execuções que se sobrepõem).
+  `
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN cancelamento_reservado_em TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

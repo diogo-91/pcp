@@ -198,8 +198,10 @@ Defina `AUTOMACAO_TOKEN` (16+ caracteres) no servidor; sem ele as rotas ficam de
 | Rota | O que faz |
 |---|---|
 | `GET /api/problematicos/automacao/cancelamentos` | Devolve `{ itens: [...] }` com os cancelamentos ainda não avisados: `id`, `numeroPedido`, `cliente`, `telefone`, `formaPagamento`, `valor`, `valorFormatado`, `atendidoPor`, `decisaoEm` e `mensagem` (texto pronto, com quebras de linha e *negrito* do WhatsApp). |
+| `POST /api/problematicos/automacao/cancelamentos/:id/reservar` | Reserva o aviso **antes** de enviar. Só uma execução consegue (200); se já foi avisado ou outra execução está enviando, responde 409 e o n8n pula o item. A reserva vence em 10 minutos se o n8n cair. |
+| `POST /api/problematicos/automacao/cancelamentos/:id/liberar` | O envio falhou: devolve o aviso para a fila. |
 | `POST /api/problematicos/automacao/cancelamentos/:id/avisado` | Confirma que o aviso foi enviado: o item sai da fila. Pode ser repetido sem erro. |
 
-Se a decisão for desfeita e refeita depois do aviso, o item volta para a fila (avisa de novo). Devoluções marcadas como Perdido não entram.
+Se a decisão for desfeita e refeita depois do aviso, o item volta para a fila (avisa de novo). Devoluções marcadas como Perdido não entram. Se o mesmo número de pedido tiver mais de um registro de devolução, o financeiro recebe um aviso só.
 
 O fluxo pronto do n8n para este aviso está em `docs/n8n/aviso-cancelamento-devolucao.json` (Evolution API; importe no n8n e preencha o nó **Configuração**).

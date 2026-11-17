@@ -3,16 +3,16 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Aviso de cancelamento de devolução → WhatsApp do financeiro\n\n**Antes de ativar**, abra o nó **Configuração** e preencha:\n- `automacaoToken`: o mesmo valor da variável AUTOMACAO_TOKEN do PCP\n- `evolutionUrl`, `evolutionInstancia` e `evolutionApikey`: da sua Evolution API\n- `numeroFinanceiro`: só dígitos com país e DDD (ex.: 5511999998888) ou o id de um grupo (ex.: 1203630xxxxxxxxx@g.us)\n- `pcpUrl`: endereço interno do PCP no EasyPanel (confira o nome do serviço)\n\n**Como funciona:** a cada 2 minutos pergunta ao PCP quais devoluções estão com a decisão \"Cliente quer cancelar mesmo\" e o financeiro ainda não foi avisado. Para cada uma envia o WhatsApp e só então confirma ao PCP (o item sai da fila). Se o envio falhar, o item continua na fila e é tentado de novo no próximo ciclo.\n\nTeste primeiro com **Execute workflow** (botão de teste): sem itens na fila ele termina sem enviar nada.",
-        "height": 380,
-        "width": 520,
+        "content": "## Aviso de cancelamento de devolução → WhatsApp do financeiro\n\n**Antes de ativar**, abra o nó **Configuração** e preencha:\n- `automacaoToken`: o mesmo valor da variável AUTOMACAO_TOKEN do PCP\n- `evolutionUrl`, `evolutionInstancia` e `evolutionApikey`: da sua Evolution API\n- `numeroFinanceiro`: só dígitos com país e DDD (ex.: 5511999998888) ou o id de um grupo (ex.: 1203630xxxxxxxxx@g.us)\n- `pcpUrl`: endereço interno do PCP no EasyPanel (confira o nome do serviço)\n\n**Como funciona (sem enviar duas vezes):**\n1. A cada 2 minutos pergunta ao PCP quais devoluções estão com a decisão \"Cliente quer cancelar mesmo\" e ainda não foram avisadas (um aviso por pedido).\n2. **Reserva** o aviso no PCP *antes* de enviar. Só uma execução consegue; se outra execução já está enviando ou o aviso já foi enviado, o PCP responde 409 e o item é ignorado.\n3. Envia o WhatsApp (a mensagem já vem pronta do PCP).\n4. Se enviou: **confirma** no PCP (o item sai da fila para sempre). Se falhou: **libera** a reserva e o item volta para a fila no próximo ciclo.\n\nSe o n8n cair no meio do envio, a reserva vence sozinha em 10 minutos.\n\nTeste primeiro com **Execute workflow**: sem itens na fila ele termina sem enviar nada.",
+        "height": 520,
+        "width": 560,
         "color": 4
       },
       "id": "11111111-0000-4000-8000-000000000001",
       "name": "Leia-me",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-120, -260]
+      "position": [-120, -380]
     },
     {
       "parameters": {
@@ -29,7 +29,7 @@
       "name": "A cada 2 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 200]
+      "position": [0, 240]
     },
     {
       "parameters": {
@@ -79,7 +79,7 @@
       "name": "Configuração",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [240, 200]
+      "position": [220, 240]
     },
     {
       "parameters": {
@@ -102,7 +102,7 @@
       "name": "Buscar avisos no PCP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 200]
+      "position": [440, 240]
     },
     {
       "parameters": {
@@ -113,7 +113,39 @@
       "name": "Separar avisos",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [720, 200]
+      "position": [660, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuração').first().json.pcpUrl }}/api/problematicos/automacao/cancelamentos/{{ $json.id }}/reservar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automacao-token",
+              "value": "={{ $('Configuração').first().json.automacaoToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "11111111-0000-4000-8000-000000000009",
+      "name": "Reservar aviso no PCP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 240],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "11111111-0000-4000-8000-00000000000a",
+      "name": "Já enviado ou em envio: ignora",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 420]
     },
     {
       "parameters": {
@@ -139,7 +171,7 @@
             },
             {
               "name": "text",
-              "value": "={{ $json.mensagem }}"
+              "value": "={{ $('Separar avisos').item.json.mensagem }}"
             }
           ]
         },
@@ -151,7 +183,7 @@
       "name": "Enviar WhatsApp (Evolution)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 200],
+      "position": [1100, 160],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 3000,
@@ -178,15 +210,36 @@
       "name": "Confirmar aviso no PCP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1220, 120]
+      "position": [1340, 80],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
     },
     {
-      "parameters": {},
-      "id": "11111111-0000-4000-8000-000000000008",
-      "name": "Falhou: tenta no próximo ciclo",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1220, 300]
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuração').first().json.pcpUrl }}/api/problematicos/automacao/cancelamentos/{{ $('Separar avisos').item.json.id }}/liberar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automacao-token",
+              "value": "={{ $('Configuração').first().json.automacaoToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "11111111-0000-4000-8000-00000000000b",
+      "name": "Envio falhou: liberar reserva",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 260],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     }
   ],
   "connections": {
@@ -200,12 +253,18 @@
       "main": [[{ "node": "Separar avisos", "type": "main", "index": 0 }]]
     },
     "Separar avisos": {
-      "main": [[{ "node": "Enviar WhatsApp (Evolution)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Reservar aviso no PCP", "type": "main", "index": 0 }]]
+    },
+    "Reservar aviso no PCP": {
+      "main": [
+        [{ "node": "Enviar WhatsApp (Evolution)", "type": "main", "index": 0 }],
+        [{ "node": "Já enviado ou em envio: ignora", "type": "main", "index": 0 }]
+      ]
     },
     "Enviar WhatsApp (Evolution)": {
       "main": [
         [{ "node": "Confirmar aviso no PCP", "type": "main", "index": 0 }],
-        [{ "node": "Falhou: tenta no próximo ciclo", "type": "main", "index": 0 }]
+        [{ "node": "Envio falhou: liberar reserva", "type": "main", "index": 0 }]
       ]
     }
   },

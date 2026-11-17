@@ -489,3 +489,44 @@ test("automação (n8n): exige o código próprio; sem AUTOMACAO_TOKEN a rota fi
   // O resto da API segue protegido pelo código da tela.
   assert.equal((await app.inject({ method: "GET", url: "/api/problematicos", headers: { "x-automacao-token": "codigo-da-automacao-123" } })).statusCode, 401);
 });
+
+test("automação: reserva antes de enviar, um aviso por pedido, libera se falhar e a reserva vence", async () => {
+  const { app, db } = await montar("", "", 25_000, "codigo-da-automacao-123");
+  const cab = { "x-automacao-token": "codigo-da-automacao-123" };
+  const base = "/api/problematicos/automacao/cancelamentos";
+  const nova = async () => ((await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1750, formaPagamento: "Pix", valor: 10 } })).json() as { id: number }).id;
+  const cancelar = (id: number) => app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${id}/acoes`, payload: { decisao: "CANCELAR" } });
+  const fila = async () => ((await app.inject({ method: "GET", url: base, headers: cab })).json() as { itens: Array<{ id: number }> }).itens.map((i) => i.id);
+
+  // Dois registros do mesmo pedido: o financeiro recebe um aviso só.
+  const a = await nova();
+  const b = await nova();
+  await cancelar(a);
+  await cancelar(b);
+  assert.deepEqual(await fila(), [a], "um aviso por pedido");
+
+  // Reservar: o primeiro consegue, o segundo (outra execução) leva 409 e o item some da fila.
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar`, headers: cab })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar`, headers: cab })).statusCode, 409);
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${b}/reservar`, headers: cab })).statusCode, 409, "o registro repetido do mesmo pedido também fica reservado");
+  assert.deepEqual(await fila(), []);
+
+  // O envio falhou: libera e volta para a fila.
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/liberar`, headers: cab })).statusCode, 200);
+  assert.deepEqual(await fila(), [a]);
+
+  // Reserva que ficou pendurada (execução morreu) vence depois de 10 minutos.
+  await app.inject({ method: "POST", url: `${base}/${a}/reservar`, headers: cab });
+  db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_reservado_em = ? WHERE devolucao_id = ?").run("2026-11-11T13:00:00.000Z", a); // relógio do teste: 14:00 → 60 min atrás
+  assert.deepEqual(await fila(), [a]);
+
+  // Avisado: sai da fila para sempre, inclusive o registro repetido; reservar de novo é recusado.
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar`, headers: cab })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/avisado`, headers: cab })).statusCode, 200);
+  assert.deepEqual(await fila(), []);
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar`, headers: cab })).statusCode, 409);
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${b}/reservar`, headers: cab })).statusCode, 409, "o repetido também foi dado como avisado");
+
+  // Sem o código da automação nada disso abre.
+  assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar` })).statusCode, 401);
+});

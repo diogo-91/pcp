@@ -16,6 +16,8 @@ export type EtapaComPrint = (typeof ETAPAS_COM_PRINT)[number];
 export const DECISOES = ["MANTEM", "CANCELAR"] as const;
 export const MAX_PRINT_BYTES = 4 * 1024 * 1024;
 export const MAX_PRINTS_POR_ETAPA = 10;
+/** Quanto tempo um aviso fica reservado enquanto o n8n envia (se a execução morrer, o aviso volta para a fila depois disso). */
+export const RESERVA_MS = 10 * 60 * 1000;
 
 /** Só imagens comuns (nunca SVG, que poderia carregar script). Confere os primeiros bytes, não só o tipo informado. */
 const ASSINATURAS: Record<string, (b: Buffer) => boolean> = {
@@ -112,27 +114,79 @@ export class AcoesDevolucaoService {
 
   /**
    * Devoluções em que o cliente decidiu cancelar e o financeiro ainda não foi avisado (ou a decisão foi refeita depois do aviso).
-   * Serve à automação (n8n), que consulta de tempos em tempos e confirma cada aviso enviado.
+   * Serve à automação (n8n), que consulta de tempos em tempos. Fica de fora o que já está reservado para envio (RESERVA_MS)
+   * e, se o mesmo pedido tiver mais de um registro, só o primeiro aparece: o financeiro recebe um aviso por pedido.
    */
   pendentesDeAvisoCancelamento(): Array<{ id: number; decisaoEm: string | null; avisadoEm: string | null }> {
-    return (
-      this.db
-        .prepare(
-          `SELECT a.devolucao_id AS id, a.decisao_em, a.cancelamento_avisado_em
-             FROM pcp_devolucao_acao a JOIN pcp_devolucao d ON d.id = a.devolucao_id
-            WHERE a.decisao = 'CANCELAR' AND d.status <> 'PERDIDO'
-              AND (a.cancelamento_avisado_em IS NULL OR a.cancelamento_avisado_em < COALESCE(a.decisao_em, ''))
-            ORDER BY a.devolucao_id`
-        )
-        .all() as Linha[]
-    ).map((l) => ({ id: l.id as number, decisaoEm: (l.decisao_em as string | null) ?? null, avisadoEm: (l.cancelamento_avisado_em as string | null) ?? null }));
+    const limite = new Date(this.agora().getTime() - RESERVA_MS).toISOString();
+    const linhas = this.db
+      .prepare(
+        `SELECT a.devolucao_id AS id, d.numero_pedido AS numero, a.decisao_em, a.cancelamento_avisado_em
+           FROM pcp_devolucao_acao a JOIN pcp_devolucao d ON d.id = a.devolucao_id
+          WHERE a.decisao = 'CANCELAR' AND d.status <> 'PERDIDO'
+            AND (a.cancelamento_avisado_em IS NULL OR a.cancelamento_avisado_em < COALESCE(a.decisao_em, ''))
+            AND (a.cancelamento_reservado_em IS NULL OR a.cancelamento_reservado_em < ?)
+          ORDER BY a.devolucao_id`
+      )
+      .all(limite) as Linha[];
+    const vistos = new Set<number>();
+    const saida: Array<{ id: number; decisaoEm: string | null; avisadoEm: string | null }> = [];
+    for (const l of linhas) {
+      if (vistos.has(l.numero as number)) continue;
+      vistos.add(l.numero as number);
+      saida.push({ id: l.id as number, decisaoEm: (l.decisao_em as string | null) ?? null, avisadoEm: (l.cancelamento_avisado_em as string | null) ?? null });
+    }
+    return saida;
   }
 
-  /** Registra que o financeiro já foi avisado desta decisão (idempotente). */
+  /** Registros da mesma devolução/pedido (o próprio e os repetidos do mesmo número de pedido). */
+  private mesmosPedido(id: number): number[] {
+    const base = this.db.prepare("SELECT numero_pedido FROM pcp_devolucao WHERE id = ?").get(id) as Linha | undefined;
+    if (!base) return [id];
+    return (this.db.prepare("SELECT id FROM pcp_devolucao WHERE numero_pedido = ?").all(base.numero_pedido as number) as Linha[]).map((l) => l.id as number);
+  }
+
+  /**
+   * Reserva o aviso antes de enviar. Só uma execução do n8n consegue: devolve false se já foi avisado, se está reservado
+   * por outra execução (a reserva vale RESERVA_MS) ou se a devolução não está mais com a decisão de cancelar.
+   */
+  reservarAvisoCancelamento(id: number): boolean {
+    this.garantirDevolucao(id);
+    const agora = this.agora();
+    const limite = new Date(agora.getTime() - RESERVA_MS).toISOString();
+    const r = this.db
+      .prepare(
+        `UPDATE pcp_devolucao_acao SET cancelamento_reservado_em = ?
+          WHERE devolucao_id = ? AND decisao = 'CANCELAR'
+            AND devolucao_id IN (SELECT id FROM pcp_devolucao WHERE status <> 'PERDIDO')
+            AND (cancelamento_avisado_em IS NULL OR cancelamento_avisado_em < COALESCE(decisao_em, ''))
+            AND (cancelamento_reservado_em IS NULL OR cancelamento_reservado_em < ?)`
+      )
+      .run(agora.toISOString(), id, limite);
+    if (Number(r.changes) === 0) return false;
+    // Os registros repetidos do mesmo pedido ficam reservados junto: o aviso é um só por pedido.
+    for (const outro of this.mesmosPedido(id)) {
+      if (outro !== id) this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_reservado_em = ? WHERE devolucao_id = ? AND decisao = 'CANCELAR'").run(agora.toISOString(), outro);
+    }
+    return true;
+  }
+
+  /** O envio falhou: devolve o aviso para a fila (a próxima consulta do n8n tenta de novo). */
+  liberarAvisoCancelamento(id: number): void {
+    this.garantirDevolucao(id);
+    for (const x of this.mesmosPedido(id)) this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_reservado_em = NULL WHERE devolucao_id = ?").run(x);
+  }
+
+  /** Registra que o financeiro já foi avisado desta decisão (idempotente). Vale também para os registros repetidos do pedido. */
   marcarAvisoCancelamento(id: number): void {
     this.garantirDevolucao(id);
-    const r = this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_avisado_em = ? WHERE devolucao_id = ? AND decisao = 'CANCELAR'").run(this.agora().toISOString(), id);
-    if (Number(r.changes) === 0) throw new ErroProblematicos("Esta devolução não está com a decisão de cancelar.", 409);
+    const agora = this.agora().toISOString();
+    let alguma = false;
+    for (const x of this.mesmosPedido(id)) {
+      const r = this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_avisado_em = ?, cancelamento_reservado_em = NULL WHERE devolucao_id = ? AND decisao = 'CANCELAR'").run(agora, x);
+      if (x === id && Number(r.changes) > 0) alguma = true;
+    }
+    if (!alguma) throw new ErroProblematicos("Esta devolução não está com a decisão de cancelar.", 409);
   }
 
   /** Grava os campos enviados (os demais ficam como estão). */
