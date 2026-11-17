@@ -83,6 +83,12 @@ export function registrarProblematicos(app: FastifyInstance, servico: Problemati
     return { itens: servico.avisosDeCancelamento() };
   });
 
+  // Só para testar a automação: volta todos os cancelamentos para "não enviado".
+  app.post("/api/problematicos/automacao/cancelamentos/reiniciar", async (request, reply) => {
+    if (!automacaoOk(request, reply)) return reply;
+    return { ok: true, reiniciados: servico.acoes.reiniciarAvisosCancelamento() };
+  });
+
   // Reservar ANTES de enviar: só uma execução do n8n consegue; as outras recebem 409 e pulam o item.
   app.post("/api/problematicos/automacao/cancelamentos/:id/reservar", async (request, reply) => {
     if (!automacaoOk(request, reply)) return reply;

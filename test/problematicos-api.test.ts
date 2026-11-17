@@ -530,3 +530,19 @@ test("automação: reserva antes de enviar, um aviso por pedido, libera se falha
   // Sem o código da automação nada disso abre.
   assert.equal((await app.inject({ method: "POST", url: `${base}/${a}/reservar` })).statusCode, 401);
 });
+
+test("automação: reiniciar volta todos os cancelamentos para 'não enviado' (uso em testes)", async () => {
+  const { app } = await montar("", "", 25_000, "codigo-da-automacao-123");
+  const cab = { "x-automacao-token": "codigo-da-automacao-123" };
+  const base = "/api/problematicos/automacao/cancelamentos";
+  const id = ((await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1750, formaPagamento: "Pix", valor: 10 } })).json() as { id: number }).id;
+  await app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${id}/acoes`, payload: { decisao: "CANCELAR" } });
+  await app.inject({ method: "POST", url: `${base}/${id}/reservar`, headers: cab });
+  await app.inject({ method: "POST", url: `${base}/${id}/avisado`, headers: cab });
+  assert.equal(((await app.inject({ method: "GET", url: base, headers: cab })).json() as { itens: unknown[] }).itens.length, 0);
+
+  assert.equal((await app.inject({ method: "POST", url: `${base}/reiniciar` })).statusCode, 401, "exige o código da automação");
+  const r = (await app.inject({ method: "POST", url: `${base}/reiniciar`, headers: cab })).json() as { reiniciados: number };
+  assert.equal(r.reiniciados, 1);
+  assert.equal(((await app.inject({ method: "GET", url: base, headers: cab })).json() as { itens: unknown[] }).itens.length, 1, "voltou para a fila");
+});

@@ -171,6 +171,12 @@ export class AcoesDevolucaoService {
     return true;
   }
 
+  /** Para testes da automação: volta todos os cancelamentos para "não enviado" (limpa avisado e reservado). Devolve quantos mudaram. */
+  reiniciarAvisosCancelamento(): number {
+    const r = this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_avisado_em = NULL, cancelamento_reservado_em = NULL WHERE cancelamento_avisado_em IS NOT NULL OR cancelamento_reservado_em IS NOT NULL").run();
+    return Number(r.changes);
+  }
+
   /** O envio falhou: devolve o aviso para a fila (a próxima consulta do n8n tenta de novo). */
   liberarAvisoCancelamento(id: number): void {
     this.garantirDevolucao(id);
