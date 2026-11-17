@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Aviso de cancelamento de devolução → WhatsApp do financeiro\n\n**Antes de ativar**, abra o nó **Configuração** e preencha:\n- `automacaoToken`: o mesmo valor da variável AUTOMACAO_TOKEN do PCP\n- `evolutionUrl`, `evolutionInstancia` e `evolutionApikey`: da sua Evolution API\n- `numeroFinanceiro`: só dígitos com país e DDD (ex.: 5511999998888) ou o id de um grupo (ex.: 1203630xxxxxxxxx@g.us)\n- `pcpUrl`: endereço interno do PCP no EasyPanel (confira o nome do serviço)\n\n**Como funciona (sem enviar duas vezes):**\n1. A cada 2 minutos pergunta ao PCP quais devoluções estão com a decisão \"Cliente quer cancelar mesmo\" e ainda não foram avisadas (um aviso por pedido).\n2. **Reserva** o aviso no PCP *antes* de enviar. Só uma execução consegue; se outra execução já está enviando ou o aviso já foi enviado, o PCP responde 409 e o item é ignorado.\n3. Envia o WhatsApp (a mensagem já vem pronta do PCP).\n4. Se enviou: **confirma** no PCP (o item sai da fila para sempre). Se falhou: **libera** a reserva e o item volta para a fila no próximo ciclo.\n\nSe o n8n cair no meio do envio, a reserva vence sozinha em 10 minutos.\n\nTeste primeiro com **Execute workflow**: sem itens na fila ele termina sem enviar nada.",
+        "content": "## Aviso de cancelamento de devolução → WhatsApp do financeiro\n\n**Antes de ativar**, abra o nó **Configuração** e preencha:\n- `automacaoToken`: o mesmo valor da variável AUTOMACAO_TOKEN do PCP\n- `evolutionUrl`, `evolutionInstancia` e `evolutionApikey`: da sua Evolution API\n- `numerosFinanceiro`: um ou mais destinos separados por vírgula. Cada um: só dígitos com país e DDD (ex.: 5511999998888) ou o id de um grupo (ex.: 1203630xxxxxxxxx@g.us)\n- `pcpUrl`: endereço interno do PCP no EasyPanel (confira o nome do serviço)\n\n**Como funciona (sem enviar duas vezes):**\n1. A cada 2 minutos pergunta ao PCP quais devoluções estão com a decisão \"Cliente quer cancelar mesmo\" e ainda não foram avisadas (um aviso por pedido).\n2. **Reserva** o aviso no PCP *antes* de enviar. Só uma execução consegue; se outra execução já está enviando ou o aviso já foi enviado, o PCP responde 409 e o item é ignorado.\n3. Envia o WhatsApp para **cada número** da lista (a mensagem já vem pronta do PCP), com 1,5 s de pausa entre os envios.\n4. Se enviou (para pelo menos um número): **confirma** no PCP (o item sai da fila para sempre). Se falhou: **libera** a reserva e o item volta para a fila no próximo ciclo.\n\nSe o n8n cair no meio do envio, a reserva vence sozinha em 10 minutos.\n\nTeste primeiro com **Execute workflow**: sem itens na fila ele termina sem enviar nada.",
         "height": 520,
         "width": 560,
         "color": 4
@@ -12,7 +12,10 @@
       "name": "Leia-me",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-120, -380]
+      "position": [
+        -120,
+        -380
+      ]
     },
     {
       "parameters": {
@@ -29,7 +32,10 @@
       "name": "A cada 2 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 240]
+      "position": [
+        0,
+        240
+      ]
     },
     {
       "parameters": {
@@ -67,8 +73,8 @@
             },
             {
               "id": "cfg-6",
-              "name": "numeroFinanceiro",
-              "value": "5511999998888",
+              "name": "numerosFinanceiro",
+              "value": "5511999998888, 5511988887777",
               "type": "string"
             }
           ]
@@ -79,7 +85,10 @@
       "name": "Configuração",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [220, 240]
+      "position": [
+        220,
+        240
+      ]
     },
     {
       "parameters": {
@@ -102,7 +111,10 @@
       "name": "Buscar avisos no PCP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 240]
+      "position": [
+        440,
+        240
+      ]
     },
     {
       "parameters": {
@@ -113,7 +125,10 @@
       "name": "Separar avisos",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [660, 240]
+      "position": [
+        660,
+        240
+      ]
     },
     {
       "parameters": {
@@ -136,7 +151,10 @@
       "name": "Reservar aviso no PCP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 240],
+      "position": [
+        880,
+        240
+      ],
       "onError": "continueErrorOutput"
     },
     {
@@ -145,7 +163,10 @@
       "name": "Já enviado ou em envio: ignora",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1100, 420]
+      "position": [
+        1100,
+        420
+      ]
     },
     {
       "parameters": {
@@ -167,11 +188,15 @@
           "parameters": [
             {
               "name": "number",
-              "value": "={{ $('Configuração').first().json.numeroFinanceiro }}"
+              "value": "={{ $json.numeros }}"
             },
             {
               "name": "text",
               "value": "={{ $('Separar avisos').item.json.mensagem }}"
+            },
+            {
+              "name": "delay",
+              "value": "1500"
             }
           ]
         },
@@ -183,7 +208,10 @@
       "name": "Enviar WhatsApp (Evolution)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 160],
+      "position": [
+        1520,
+        160
+      ],
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 3000,
@@ -210,7 +238,10 @@
       "name": "Confirmar aviso no PCP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 80],
+      "position": [
+        1760,
+        80
+      ],
       "retryOnFail": true,
       "maxTries": 5,
       "waitBetweenTries": 5000
@@ -236,35 +267,153 @@
       "name": "Envio falhou: liberar reserva",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 260],
+      "position": [
+        1760,
+        260
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dest-1",
+              "name": "numeros",
+              "value": "={{ String($('Configuração').first().json.numerosFinanceiro).split(/[,;\\s]+/).map((n) => n.trim()).filter(Boolean) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-0000-4000-8000-00000000000c",
+      "name": "Destinatários",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "numeros",
+        "options": {}
+      },
+      "id": "11111111-0000-4000-8000-00000000000d",
+      "name": "Um item por número",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        160
+      ]
     }
   ],
   "connections": {
     "A cada 2 minutos": {
-      "main": [[{ "node": "Configuração", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Configuração",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Configuração": {
-      "main": [[{ "node": "Buscar avisos no PCP", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Buscar avisos no PCP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Buscar avisos no PCP": {
-      "main": [[{ "node": "Separar avisos", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Separar avisos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Separar avisos": {
-      "main": [[{ "node": "Reservar aviso no PCP", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Reservar aviso no PCP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Reservar aviso no PCP": {
       "main": [
-        [{ "node": "Enviar WhatsApp (Evolution)", "type": "main", "index": 0 }],
-        [{ "node": "Já enviado ou em envio: ignora", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Destinatários",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Já enviado ou em envio: ignora",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Enviar WhatsApp (Evolution)": {
       "main": [
-        [{ "node": "Confirmar aviso no PCP", "type": "main", "index": 0 }],
-        [{ "node": "Envio falhou: liberar reserva", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Confirmar aviso no PCP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envio falhou: liberar reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Destinatários": {
+      "main": [
+        [
+          {
+            "node": "Um item por número",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Um item por número": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
