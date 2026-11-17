@@ -1,0 +1,216 @@
+{
+  "name": "PCP - Aviso de cancelamento de devolucao (WhatsApp financeiro)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Aviso de cancelamento de devolução → WhatsApp do financeiro\n\n**Antes de ativar**, abra o nó **Configuração** e preencha:\n- `automacaoToken`: o mesmo valor da variável AUTOMACAO_TOKEN do PCP\n- `evolutionUrl`, `evolutionInstancia` e `evolutionApikey`: da sua Evolution API\n- `numeroFinanceiro`: só dígitos com país e DDD (ex.: 5511999998888) ou o id de um grupo (ex.: 1203630xxxxxxxxx@g.us)\n- `pcpUrl`: endereço interno do PCP no EasyPanel (confira o nome do serviço)\n\n**Como funciona:** a cada 2 minutos pergunta ao PCP quais devoluções estão com a decisão \"Cliente quer cancelar mesmo\" e o financeiro ainda não foi avisado. Para cada uma envia o WhatsApp e só então confirma ao PCP (o item sai da fila). Se o envio falhar, o item continua na fila e é tentado de novo no próximo ciclo.\n\nTeste primeiro com **Execute workflow** (botão de teste): sem itens na fila ele termina sem enviar nada.",
+        "height": 380,
+        "width": 520,
+        "color": 4
+      },
+      "id": "11111111-0000-4000-8000-000000000001",
+      "name": "Leia-me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-120, -260]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "11111111-0000-4000-8000-000000000002",
+      "name": "A cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-1",
+              "name": "pcpUrl",
+              "value": "http://pcp_pcp:3100",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "automacaoToken",
+              "value": "COLE_AQUI_O_AUTOMACAO_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "evolutionUrl",
+              "value": "http://evolution-api:8080",
+              "type": "string"
+            },
+            {
+              "id": "cfg-4",
+              "name": "evolutionInstancia",
+              "value": "NOME_DA_INSTANCIA",
+              "type": "string"
+            },
+            {
+              "id": "cfg-5",
+              "name": "evolutionApikey",
+              "value": "COLE_AQUI_A_APIKEY_DA_EVOLUTION",
+              "type": "string"
+            },
+            {
+              "id": "cfg-6",
+              "name": "numeroFinanceiro",
+              "value": "5511999998888",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-0000-4000-8000-000000000003",
+      "name": "Configuração",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Configuração').first().json.pcpUrl }}/api/problematicos/automacao/cancelamentos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automacao-token",
+              "value": "={{ $('Configuração').first().json.automacaoToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "11111111-0000-4000-8000-000000000004",
+      "name": "Buscar avisos no PCP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 200]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "itens",
+        "options": {}
+      },
+      "id": "11111111-0000-4000-8000-000000000005",
+      "name": "Separar avisos",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuração').first().json.evolutionUrl }}/message/sendText/{{ $('Configuração').first().json.evolutionInstancia }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Configuração').first().json.evolutionApikey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Configuração').first().json.numeroFinanceiro }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.mensagem }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "11111111-0000-4000-8000-000000000006",
+      "name": "Enviar WhatsApp (Evolution)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 200],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuração').first().json.pcpUrl }}/api/problematicos/automacao/cancelamentos/{{ $('Separar avisos').item.json.id }}/avisado",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automacao-token",
+              "value": "={{ $('Configuração').first().json.automacaoToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "11111111-0000-4000-8000-000000000007",
+      "name": "Confirmar aviso no PCP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 120]
+    },
+    {
+      "parameters": {},
+      "id": "11111111-0000-4000-8000-000000000008",
+      "name": "Falhou: tenta no próximo ciclo",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1220, 300]
+    }
+  ],
+  "connections": {
+    "A cada 2 minutos": {
+      "main": [[{ "node": "Configuração", "type": "main", "index": 0 }]]
+    },
+    "Configuração": {
+      "main": [[{ "node": "Buscar avisos no PCP", "type": "main", "index": 0 }]]
+    },
+    "Buscar avisos no PCP": {
+      "main": [[{ "node": "Separar avisos", "type": "main", "index": 0 }]]
+    },
+    "Separar avisos": {
+      "main": [[{ "node": "Enviar WhatsApp (Evolution)", "type": "main", "index": 0 }]]
+    },
+    "Enviar WhatsApp (Evolution)": {
+      "main": [
+        [{ "node": "Confirmar aviso no PCP", "type": "main", "index": 0 }],
+        [{ "node": "Falhou: tenta no próximo ciclo", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

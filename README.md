@@ -201,3 +201,5 @@ Defina `AUTOMACAO_TOKEN` (16+ caracteres) no servidor; sem ele as rotas ficam de
 | `POST /api/problematicos/automacao/cancelamentos/:id/avisado` | Confirma que o aviso foi enviado: o item sai da fila. Pode ser repetido sem erro. |
 
 Se a decisão for desfeita e refeita depois do aviso, o item volta para a fila (avisa de novo). Devoluções marcadas como Perdido não entram.
+
+O fluxo pronto do n8n para este aviso está em `docs/n8n/aviso-cancelamento-devolucao.json` (Evolution API; importe no n8n e preencha o nó **Configuração**).
