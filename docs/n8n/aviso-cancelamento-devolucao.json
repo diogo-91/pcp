@@ -183,26 +183,11 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "number",
-              "value": "={{ $json.numeros }}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $('Separar avisos').item.json.mensagem }}"
-            },
-            {
-              "name": "delay",
-              "value": "1500"
-            }
-          ]
-        },
+        "specifyBody": "json",
         "options": {
           "timeout": 30000
-        }
+        },
+        "jsonBody": "={{ JSON.stringify({ number: $json.numeros, text: $('Separar avisos').item.json.mensagem, delay: 1500 }) }}"
       },
       "id": "11111111-0000-4000-8000-000000000006",
       "name": "Enviar WhatsApp (Evolution)",
