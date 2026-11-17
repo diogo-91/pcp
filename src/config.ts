@@ -15,6 +15,8 @@ export interface AppConfig {
   accessToken: string;
   /** Segundo código, de perfil "consulta" (só lê a Programação, sem telefones nem edição). Vazio = não existe. */
   accessTokenConsulta: string;
+  /** Código que o n8n usa para consultar os avisos de cancelamento de devolução (vazio = automação desativada). */
+  automacaoToken: string;
   /** Códigos de itensPedido[].status que a Nomus usa para "cancelado" (vazio = ainda não identificado). */
   nomusStatusCancelado: number[];
   /** Origens (sites) autorizadas a chamar a consulta pública do navegador. Vazio = qualquer uma. */
@@ -65,6 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     syncIntervalMs: Number(env.SYNC_INTERVAL_MS ?? 60 * 60 * 1000),
     accessToken: env.ACCESS_TOKEN ?? "",
     accessTokenConsulta: (env.ACCESS_TOKEN_CONSULTA ?? "").trim(),
+    automacaoToken: (env.AUTOMACAO_TOKEN ?? "").trim(),
     nomusStatusCancelado: (env.NOMUS_STATUS_CANCELADO ?? "").split(",").map((v) => Number(v.trim())).filter((n) => v_ok(n)),
     publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
     trustProxyHops: hopsDoProxy(env),
@@ -94,6 +97,9 @@ export function problemasDeConfiguracao(config: AppConfig, env: NodeJS.ProcessEn
     problemas.push("ACCESS_TOKEN não definido: sem ele qualquer pessoa com o endereço vê nomes e telefones de clientes e edita a tabela. Defina um código de acesso.");
   } else if (config.accessToken && config.accessToken.length < 8) {
     problemas.push("ACCESS_TOKEN muito curto: use pelo menos 8 caracteres.");
+  }
+  if (config.automacaoToken && config.automacaoToken.length < 16) {
+    problemas.push("AUTOMACAO_TOKEN muito curto: use pelo menos 16 caracteres (é a senha da automação do n8n).");
   }
   if (config.accessTokenConsulta && config.accessTokenConsulta === config.accessToken) {
     problemas.push("ACCESS_TOKEN_CONSULTA igual ao ACCESS_TOKEN: use um código diferente para o perfil de consulta.");

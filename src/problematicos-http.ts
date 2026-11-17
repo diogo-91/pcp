@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ErroProblematicos, TIPOS_PROBLEMATICOS, type ProblematicosService, type TipoProblematico } from "./problematicos";
 
@@ -28,7 +29,7 @@ const tipoDe = (v: string): TipoProblematico => {
 };
 
 /** Rotas do botão "Pedidos Problemáticos". Ficam sob /api/problematicos: o perfil de consulta não chega aqui. */
-export function registrarProblematicos(app: FastifyInstance, servico: ProblematicosService): void {
+export function registrarProblematicos(app: FastifyInstance, servico: ProblematicosService, automacaoToken = ""): void {
   const usuarioDe = (request: FastifyRequest) => {
     const h = request.headers["x-pcp-usuario"];
     let nome = "PCP";
@@ -59,6 +60,36 @@ export function registrarProblematicos(app: FastifyInstance, servico: Problemati
   app.get("/api/problematicos/pedidos/:numero", async (request, reply) =>
     tratar(reply, () => servico.detalhe(Number((request.params as { numero: string }).numero)))
   );
+
+  // ---- Automação (n8n): avisos de "cliente quer cancelar" para o financeiro. Código próprio (AUTOMACAO_TOKEN), nunca aberto.
+  const hashDe = (v: string) => createHash("sha256").update(v).digest();
+  const automacaoOk = (request: FastifyRequest, reply: FastifyReply): boolean => {
+    if (!automacaoToken) {
+      reply.code(503).send({ erro: "Automação desativada: defina AUTOMACAO_TOKEN no servidor." });
+      return false;
+    }
+    const h = request.headers["x-automacao-token"];
+    const recebido = typeof h === "string" ? h : String(request.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+    if (!recebido || !timingSafeEqual(hashDe(recebido), hashDe(automacaoToken))) {
+      reply.code(401).send({ erro: "Código da automação inválido." });
+      return false;
+    }
+    return true;
+  };
+
+  app.get("/api/problematicos/automacao/cancelamentos", async (request, reply) => {
+    if (!automacaoOk(request, reply)) return reply;
+    reply.header("Cache-Control", "no-store");
+    return { itens: servico.avisosDeCancelamento() };
+  });
+
+  app.post("/api/problematicos/automacao/cancelamentos/:id/avisado", async (request, reply) => {
+    if (!automacaoOk(request, reply)) return reply;
+    return tratar(reply, () => {
+      servico.acoes.marcarAvisoCancelamento(idDe((request.params as { id: string }).id));
+      return { ok: true };
+    });
+  });
 
   // ---- Devoluções > Ações (etapas do atendimento e prints)
   const acoes = servico.acoes;

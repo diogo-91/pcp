@@ -188,3 +188,16 @@ test/         testes (node:test)
 ```
 
 O schema do banco evolui por migrações em `src/db.ts`: para mudar, **acrescente** um item ao final da lista, nunca edite os antigos.
+
+## Automação (n8n): aviso de cancelamento de devolução
+
+Quando uma devolução chega na etapa **Decisão = "Cliente quer cancelar mesmo"**, ela entra numa fila de avisos para o financeiro. O n8n consulta a fila de tempos em tempos, envia o WhatsApp e confirma cada envio.
+
+Defina `AUTOMACAO_TOKEN` (16+ caracteres) no servidor; sem ele as rotas ficam desativadas (503). O n8n manda o código no cabeçalho `x-automacao-token` (ou `Authorization: Bearer ...`). Esse código é separado do `ACCESS_TOKEN` da tela e só abre estas duas rotas.
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/problematicos/automacao/cancelamentos` | Devolve `{ itens: [...] }` com os cancelamentos ainda não avisados: `id`, `numeroPedido`, `cliente`, `telefone`, `formaPagamento`, `valor`, `valorFormatado`, `atendidoPor`, `decisaoEm` e `mensagem` (texto pronto, com quebras de linha e *negrito* do WhatsApp). |
+| `POST /api/problematicos/automacao/cancelamentos/:id/avisado` | Confirma que o aviso foi enviado: o item sai da fila. Pode ser repetido sem erro. |
+
+Se a decisão for desfeita e refeita depois do aviso, o item volta para a fila (avisa de novo). Devoluções marcadas como Perdido não entram.

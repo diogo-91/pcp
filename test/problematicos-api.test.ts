@@ -29,7 +29,7 @@ class NomusFalso implements NomusLeitor {
   }
 }
 
-async function montar(accessToken = "", consulta = "", tempoLimiteMs = 25_000) {
+async function montar(accessToken = "", consulta = "", tempoLimiteMs = 25_000, automacaoToken = "") {
   const db = openDatabase(":memory:");
   const repo = new PcpRepository(db);
   repo.inserirNovos(
@@ -42,7 +42,7 @@ async function montar(accessToken = "", consulta = "", tempoLimiteMs = 25_000) {
   const nomus = new NomusFalso();
   const servico = new ProblematicosService(db, nomus, () => AGORA, tempoLimiteMs);
   const sync = new SyncService({ get: async () => [] as never }, repo, { statusLiberado: 2 });
-  const app = await buildApp({ repo, sync, accessToken, accessTokenConsulta: consulta, problematicos: servico, agora: () => AGORA });
+  const app = await buildApp({ repo, sync, accessToken, accessTokenConsulta: consulta, automacaoToken, problematicos: servico, agora: () => AGORA });
   return { app, nomus, servico, db };
 }
 
@@ -437,4 +437,53 @@ test("registro antigo sem telefone mostra o telefone do cadastro do cliente no P
   db.prepare("UPDATE pcp_defeito SET telefone = '' WHERE id = ?").run(id); // como era antes do campo existir
   const lista = (await app.inject({ method: "GET", url: "/api/problematicos" })).json() as { defeitos: Array<{ telefone: string }> };
   assert.equal(lista.defeitos[0].telefone, "2");
+});
+
+test("automação (n8n): lista os cancelamentos ainda não avisados com a mensagem pronta e confirma o aviso", async () => {
+  const { app, db } = await montar("", "", 25_000, "codigo-da-automacao-123");
+  const cab = { "x-automacao-token": "codigo-da-automacao-123" };
+  const dev = ((await app.inject({ method: "POST", url: "/api/problematicos/devolucoes", payload: { numeroPedido: 1750, formaPagamento: "Pix", valor: 1155.8 } })).json() as { id: number }).id;
+  const url = "/api/problematicos/automacao/cancelamentos";
+
+  const vazio = (await app.inject({ method: "GET", url, headers: cab })).json() as { itens: unknown[] };
+  assert.equal(vazio.itens.length, 0, "sem decisão de cancelar não há aviso");
+
+  await app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${dev}/acoes`, payload: { sacQuem: "Ana", decisao: "MANTEM" } });
+  assert.equal(((await app.inject({ method: "GET", url, headers: cab })).json() as { itens: unknown[] }).itens.length, 0, "mantém o pedido: nada a avisar");
+
+  await app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${dev}/acoes`, payload: { decisao: "CANCELAR" } });
+  const lista = (await app.inject({ method: "GET", url, headers: cab })).json() as { itens: Array<{ id: number; numeroPedido: number; mensagem: string; valorFormatado: string }> };
+  assert.equal(lista.itens.length, 1);
+  assert.equal(lista.itens[0].numeroPedido, 1750);
+  assert.match(lista.itens[0].mensagem, /cliente quer cancelar/);
+  assert.match(lista.itens[0].mensagem, /Pedido: 1750/);
+  assert.match(lista.itens[0].mensagem, /Valor da devolução: R\$ 1\.155,80/);
+  assert.match(lista.itens[0].mensagem, /Atendido por: Ana/);
+  assert.match(lista.itens[0].mensagem, /\n/);
+
+  // Confirmado: some da fila (e confirmar de novo não dá erro).
+  assert.equal((await app.inject({ method: "POST", url: `${url}/${dev}/avisado`, headers: cab })).statusCode, 200);
+  assert.equal(((await app.inject({ method: "GET", url, headers: cab })).json() as { itens: unknown[] }).itens.length, 0);
+  assert.equal((await app.inject({ method: "POST", url: `${url}/${dev}/avisado`, headers: cab })).statusCode, 200);
+
+  // Se a decisão for refeita depois do aviso (voltou a cancelar), avisa de novo.
+  await app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${dev}/acoes`, payload: { decisao: "MANTEM" } });
+  await app.inject({ method: "PUT", url: `/api/problematicos/devolucoes/${dev}/acoes`, payload: { decisao: "CANCELAR" } });
+  db.prepare("UPDATE pcp_devolucao_acao SET decisao_em = ? WHERE devolucao_id = ?").run("2099-01-01T00:00:00.000Z", dev); // o relógio do teste é fixo: avança a hora da nova decisão
+  assert.equal(((await app.inject({ method: "GET", url, headers: cab })).json() as { itens: unknown[] }).itens.length, 1);
+});
+
+test("automação (n8n): exige o código próprio; sem AUTOMACAO_TOKEN a rota fica desativada; não depende do código de acesso da tela", async () => {
+  const desativada = await montar();
+  assert.equal((await desativada.app.inject({ method: "GET", url: "/api/problematicos/automacao/cancelamentos", headers: { "x-automacao-token": "qualquer" } })).statusCode, 503);
+
+  const { app } = await montar("acesso-da-tela", "", 25_000, "codigo-da-automacao-123");
+  const url = "/api/problematicos/automacao/cancelamentos";
+  assert.equal((await app.inject({ method: "GET", url })).statusCode, 401);
+  assert.equal((await app.inject({ method: "GET", url, headers: { "x-automacao-token": "errado" } })).statusCode, 401);
+  assert.equal((await app.inject({ method: "GET", url, headers: { "x-pcp-token": "acesso-da-tela" } })).statusCode, 401, "o código da tela não abre a automação");
+  assert.equal((await app.inject({ method: "GET", url, headers: { "x-automacao-token": "codigo-da-automacao-123" } })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url, headers: { authorization: "Bearer codigo-da-automacao-123" } })).statusCode, 200);
+  // O resto da API segue protegido pelo código da tela.
+  assert.equal((await app.inject({ method: "GET", url: "/api/problematicos", headers: { "x-automacao-token": "codigo-da-automacao-123" } })).statusCode, 401);
 });

@@ -39,6 +39,8 @@ export interface AppDeps {
   accessToken: string;
   /** Segundo código, de perfil "consulta": só lê a Programação, sem telefone de clientes e sem editar. Vazio = não existe. */
   accessTokenConsulta?: string;
+  /** Código da automação (n8n): protege só as rotas /api/problematicos/automacao/*. Vazio = desativada. */
+  automacaoToken?: string;
   logger?: boolean;
   /** Relógio injetável para os testes. */
   agora?: () => Date;
@@ -79,6 +81,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const caminho = request.url.split("?")[0];
       // A consulta pública fica fora da senha de propósito: é o que o site dos clientes chama.
       if (!caminho.startsWith("/api/") || caminho === "/api/health" || caminho.startsWith("/api/publico/")) return;
+      // A automação tem código próprio, conferido na própria rota (o n8n não usa o código de acesso da tela).
+      if (caminho.startsWith("/api/problematicos/automacao/")) return;
 
       const recebido = request.headers["x-pcp-token"];
       if (typeof recebido === "string" && timingSafeEqual(hash(recebido), esperado)) return;
@@ -94,7 +98,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   }
 
-  if (deps.problematicos) registrarProblematicos(app, deps.problematicos);
+  if (deps.problematicos) registrarProblematicos(app, deps.problematicos, deps.automacaoToken ?? "");
   if (deps.programacao) registrarProgramacao(app, deps.programacao, deps.sincronizarPedidoProgramacao, deps.importarPlanilhaProgramacao, deps.extrasProgramacao, deps.observacoesNomusProgramacao);
   else app.decorateRequest("perfil", "completo");
 

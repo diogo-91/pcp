@@ -110,6 +110,31 @@ export class AcoesDevolucaoService {
     return mapa;
   }
 
+  /**
+   * Devoluções em que o cliente decidiu cancelar e o financeiro ainda não foi avisado (ou a decisão foi refeita depois do aviso).
+   * Serve à automação (n8n), que consulta de tempos em tempos e confirma cada aviso enviado.
+   */
+  pendentesDeAvisoCancelamento(): Array<{ id: number; decisaoEm: string | null; avisadoEm: string | null }> {
+    return (
+      this.db
+        .prepare(
+          `SELECT a.devolucao_id AS id, a.decisao_em, a.cancelamento_avisado_em
+             FROM pcp_devolucao_acao a JOIN pcp_devolucao d ON d.id = a.devolucao_id
+            WHERE a.decisao = 'CANCELAR' AND d.status <> 'PERDIDO'
+              AND (a.cancelamento_avisado_em IS NULL OR a.cancelamento_avisado_em < COALESCE(a.decisao_em, ''))
+            ORDER BY a.devolucao_id`
+        )
+        .all() as Linha[]
+    ).map((l) => ({ id: l.id as number, decisaoEm: (l.decisao_em as string | null) ?? null, avisadoEm: (l.cancelamento_avisado_em as string | null) ?? null }));
+  }
+
+  /** Registra que o financeiro já foi avisado desta decisão (idempotente). */
+  marcarAvisoCancelamento(id: number): void {
+    this.garantirDevolucao(id);
+    const r = this.db.prepare("UPDATE pcp_devolucao_acao SET cancelamento_avisado_em = ? WHERE devolucao_id = ? AND decisao = 'CANCELAR'").run(this.agora().toISOString(), id);
+    if (Number(r.changes) === 0) throw new ErroProblematicos("Esta devolução não está com a decisão de cancelar.", 409);
+  }
+
   /** Grava os campos enviados (os demais ficam como estão). */
   salvar(id: number, corpo: Record<string, unknown>, usuario: string): AcoesDevolucao {
     this.garantirDevolucao(id);

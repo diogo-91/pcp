@@ -387,6 +387,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_pcp_defeito_anexo ON pcp_defeito_anexo (defeito_id);
   `,
+  // Automação (n8n): quando o aviso de "cliente quer cancelar" foi entregue ao financeiro, para não avisar duas vezes.
+  `
+  ALTER TABLE pcp_devolucao_acao ADD COLUMN cancelamento_avisado_em TEXT;
+  `,
 ];
 
 export function openDatabase(filePath: string): DatabaseSync {

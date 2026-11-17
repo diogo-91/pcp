@@ -87,6 +87,7 @@ const app = await buildApp({
     importarDeArquivo(arquivo, { db, repo: progRepo, gravar: o.gravar, forcar: o.forcar, pastaBackup: join(dirname(config.databaseFile), "backups-operacoes") }),
   accessToken: config.accessToken,
   accessTokenConsulta: config.accessTokenConsulta,
+  automacaoToken: config.automacaoToken,
   logger: true,
   trustProxyHops: config.trustProxyHops,
   publico: { origens: config.publicOrigins },

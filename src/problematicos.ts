@@ -184,6 +184,44 @@ export class ProblematicosService {
     return d?.telefone ?? "";
   }
 
+  /** Avisos de "cliente quer cancelar" que ainda não foram entregues ao financeiro, já com o texto pronto para enviar. */
+  avisosDeCancelamento() {
+    const pendentes = this.acoes.pendentesDeAvisoCancelamento();
+    if (!pendentes.length) return [];
+    const devolucoes = this.listar().devolucoes as Array<Record<string, unknown>>;
+    const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+    const itens = [];
+    for (const p of pendentes) {
+      const d = devolucoes.find((x) => x.id === p.id);
+      if (!d) continue;
+      const a = this.acoes.obter(p.id);
+      const valor = typeof d.valor === "number" ? brl(Math.round(d.valor * 100)) : "";
+      const linhas = [
+        "*Devolução: cliente quer cancelar o pedido*",
+        `Pedido: ${d.numeroPedido}`,
+        d.cliente ? `Cliente: ${d.cliente}` : "",
+        d.telefone ? `Telefone: ${d.telefone}` : "",
+        d.formaPagamento ? `Forma de pagamento: ${d.formaPagamento}` : "",
+        valor ? `Valor da devolução: ${valor}` : "",
+        a.sac.quem ? `Atendido por: ${a.sac.quem}` : "",
+        p.decisaoEm ? `Decisão registrada em: ${quando(p.decisaoEm)}` : "",
+      ].filter(Boolean);
+      itens.push({
+        id: p.id,
+        numeroPedido: d.numeroPedido,
+        cliente: d.cliente,
+        telefone: d.telefone,
+        formaPagamento: d.formaPagamento,
+        valor: d.valor,
+        valorFormatado: valor,
+        atendidoPor: a.sac.quem,
+        decisaoEm: p.decisaoEm,
+        mensagem: linhas.join("\n"),
+      });
+    }
+    return itens;
+  }
+
   private async nomesDasFormas(): Promise<Map<number, string>> {
     const agora = this.agora().getTime();
     if (this.formasCache && agora - this.formasCache.em < 24 * 3600_000) return this.formasCache.nomes;
